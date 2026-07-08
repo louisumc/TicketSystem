@@ -12,7 +12,7 @@ using TicketSystem.Infrastructure.Data;
 namespace TicketSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260708200820_SeedDevelopmentData")]
+    [Migration("20260708220221_SeedDevelopmentData")]
     partial class SeedDevelopmentData
     {
         /// <inheritdoc />
@@ -72,6 +72,75 @@ namespace TicketSystem.Infrastructure.Migrations
                         .HasDatabaseName("IX_Buses_Plate");
 
                     b.ToTable("Buses", (string)null);
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Seat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Column")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("PassengerDocument")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PassengerName")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("PriceMultiplier")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int>("Row")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_Seats_Status");
+
+                    b.HasIndex("TripId")
+                        .HasDatabaseName("IX_Seats_TripId");
+
+                    b.HasIndex("Row", "Column")
+                        .HasDatabaseName("IX_Seats_Row_Column");
+
+                    b.HasIndex("TripId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Seats_TripId_Number");
+
+                    b.ToTable("Seats", (string)null);
                 });
 
             modelBuilder.Entity("TicketSystem.Domain.Entities.Trip", b =>
@@ -136,6 +205,17 @@ namespace TicketSystem.Infrastructure.Migrations
                     b.ToTable("Trips", (string)null);
                 });
 
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Seat", b =>
+                {
+                    b.HasOne("TicketSystem.Domain.Entities.Trip", "Trip")
+                        .WithMany("Seats")
+                        .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Trip");
+                });
+
             modelBuilder.Entity("TicketSystem.Domain.Entities.Trip", b =>
                 {
                     b.HasOne("TicketSystem.Domain.Entities.Bus", "Bus")
@@ -150,6 +230,11 @@ namespace TicketSystem.Infrastructure.Migrations
             modelBuilder.Entity("TicketSystem.Domain.Entities.Bus", b =>
                 {
                     b.Navigation("Trips");
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Trip", b =>
+                {
+                    b.Navigation("Seats");
                 });
 #pragma warning restore 612, 618
         }

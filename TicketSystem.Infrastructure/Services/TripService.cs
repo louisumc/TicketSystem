@@ -9,15 +9,21 @@ namespace TicketSystem.Infrastructure.Services
     public class TripService : BaseService<Trip>, ITripService
     {
         private readonly IRepository<Bus> _busRepository;
+        private readonly IRepository<Seat> _seatRepository;
+        private readonly ISeatService _seatService;
         private readonly IMapper _mapper;
 
         public TripService(
-            IRepository<Trip> tripRepository,
-            IRepository<Bus> busRepository,
-            IMapper mapper)
-            : base(tripRepository)
+        IRepository<Trip> tripRepository,
+        IRepository<Bus> busRepository,
+        IRepository<Seat> seatRepository,
+        ISeatService seatService,
+        IMapper mapper)
+        : base(tripRepository)
         {
             _busRepository = busRepository;
+            _seatRepository = seatRepository;
+            _seatService = seatService;
             _mapper = mapper;
         }
 
@@ -41,10 +47,19 @@ namespace TicketSystem.Infrastructure.Services
             }
         }
 
+        private async Task LoadSeatsForTripAsync(Trip trip)
+        {
+            if (trip.Id != Guid.Empty)
+            {
+                var seats = await _seatRepository.FindAsync(s => s.TripId == trip.Id && s.IsActive);
+                trip.Seats = seats.OrderBy(s => s.Row).ThenBy(s => s.Column).ToList();
+            }
+        }
+
         public async Task<TripResponseDto> GetTripResponseByIdAsync(Guid id)
         {
             var trip = await _repository.GetByIdAsync(id);
-            
+
             if (trip == null)
                 throw new KeyNotFoundException($"Viagem com ID {id} não encontrada");
 
@@ -52,11 +67,23 @@ namespace TicketSystem.Infrastructure.Services
             return _mapper.Map<TripResponseDto>(trip);
         }
 
+        public async Task<TripDetailsDto> GetTripDetailsByIdAsync(Guid id)
+        {
+            var trip = await _repository.GetByIdAsync(id);
+
+            if (trip == null)
+                throw new KeyNotFoundException($"Viagem com ID {id} não encontrada");
+
+            await LoadBusForTripAsync(trip);
+            await LoadSeatsForTripAsync(trip);
+            return _mapper.Map<TripDetailsDto>(trip);
+        }
+
         public async Task<IEnumerable<TripResponseDto>> GetAllTripResponsesAsync()
         {
             var trips = await _repository.GetAllAsync();
             await LoadBusesForTripsAsync(trips);
-            
+
             return _mapper.Map<IEnumerable<TripResponseDto>>(trips.OrderBy(t => t.DepartureTime));
         }
 
@@ -68,7 +95,7 @@ namespace TicketSystem.Infrastructure.Services
 
             var trips = await _repository.FindAsync(t => t.BusId == busId);
             await LoadBusesForTripsAsync(trips);
-            
+
             return _mapper.Map<IEnumerable<TripResponseDto>>(trips.OrderBy(t => t.DepartureTime));
         }
 
@@ -76,17 +103,17 @@ namespace TicketSystem.Infrastructure.Services
         {
             var trips = await _repository.FindAsync(t => t.Status == status);
             await LoadBusesForTripsAsync(trips);
-            
+
             return _mapper.Map<IEnumerable<TripResponseDto>>(trips.OrderBy(t => t.DepartureTime));
         }
 
         public async Task<IEnumerable<TripResponseDto>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
         {
-            var trips = await _repository.FindAsync(t => 
-                t.DepartureTime >= startDate && t.DepartureTime <= endDate);
-            
+            var trips = await _repository.FindAsync(t =>
+            t.DepartureTime >= startDate && t.DepartureTime <= endDate);
+
             await LoadBusesForTripsAsync(trips);
-            
+
             return _mapper.Map<IEnumerable<TripResponseDto>>(trips.OrderBy(t => t.DepartureTime));
         }
 
@@ -104,9 +131,30 @@ namespace TicketSystem.Infrastructure.Services
 
             var trip = _mapper.Map<Trip>(createTripDto);
             var createdTrip = await _repository.AddAsync(trip);
-            
+
             await LoadBusForTripAsync(createdTrip);
             return _mapper.Map<TripResponseDto>(createdTrip);
+        }
+
+        public async Task<TripDetailsDto> CreateTripWithSeatsAsync(CreateTripDto createTripDto)
+        {
+            // 1. Cria a viagem
+            var tripResponse = await CreateTripAsync(createTripDto);
+
+            // 2. Busca o ônibus para obter a capacidade
+            var bus = await _busRepository.GetByIdAsync(createTripDto.BusId);
+            if (bus == null)
+                throw new KeyNotFoundException($"Ônibus com ID {createTripDto.BusId} não encontrado");
+
+            // 3. Gera os assentos baseado na capacidade do ônibus
+            var trip = await _repository.GetByIdAsync(tripResponse.Id);
+            if (trip == null)
+                throw new KeyNotFoundException($"Viagem com ID {tripResponse.Id} não encontrada");
+
+            await _seatService.GenerateSeatsForTripAsync(trip.Id, bus.Capacity);
+
+            // 4. Retorna os detalhes completos
+            return await GetTripDetailsByIdAsync(trip.Id);
         }
 
         public async Task<TripResponseDto> UpdateTripAsync(UpdateTripDto updateTripDto)
@@ -127,7 +175,7 @@ namespace TicketSystem.Infrastructure.Services
 
             _mapper.Map(updateTripDto, trip);
             await _repository.UpdateAsync(trip);
-            
+
             await LoadBusForTripAsync(trip);
             return _mapper.Map<TripResponseDto>(trip);
         }
@@ -159,3 +207,4 @@ namespace TicketSystem.Infrastructure.Services
         }
     }
 }
+

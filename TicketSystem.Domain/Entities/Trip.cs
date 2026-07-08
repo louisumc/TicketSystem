@@ -29,7 +29,8 @@ namespace TicketSystem.Domain.Entities
         [Required]
         public TripStatus Status { get; set; }
 
-        // Navigation property
+        // Navigation properties
         public virtual Bus Bus { get; set; } = null!;
+        public virtual ICollection<Seat> Seats { get; set; } = new List<Seat>();
     }
 }

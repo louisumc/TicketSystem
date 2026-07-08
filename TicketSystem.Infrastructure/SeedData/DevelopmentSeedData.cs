@@ -11,7 +11,7 @@ namespace TicketSystem.Infrastructure.SeedData
         public static void Up(MigrationBuilder migrationBuilder)
         {
             // ============================================
-            // SEED DE ÔNIBUS
+            // SEED DE ONIBUS
             // ============================================
             migrationBuilder.InsertData(
             table: "Buses",
@@ -122,11 +122,129 @@ true,
 Now
 }
             });
+
+            // ============================================
+            // SEED DE ASSENTOS
+            // ============================================
+            var trip1Id = Guid.Parse("BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB");
+            var trip2Id = Guid.Parse("CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC");
+            var trip3Id = Guid.Parse("DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD");
+            var trip4Id = Guid.Parse("EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE");
+
+            // Assentos para viagem 1 (45 assentos)
+            var seats1 = GenerateSeatsForTrip(trip1Id, 45);
+            foreach (var seat in seats1)
+            {
+                migrationBuilder.InsertData(
+                table: "Seats",
+                columns: new[] { "Id", "TripId", "Number", "Type", "Status", "Row", "Column", "PriceMultiplier", "IsActive", "CreatedAt" },
+                values: seat
+                );
+            }
+
+            // Assentos para viagem 2 (45 assentos)
+            var seats2 = GenerateSeatsForTrip(trip2Id, 45);
+            foreach (var seat in seats2)
+            {
+                migrationBuilder.InsertData(
+                table: "Seats",
+                columns: new[] { "Id", "TripId", "Number", "Type", "Status", "Row", "Column", "PriceMultiplier", "IsActive", "CreatedAt" },
+                values: seat
+                );
+            }
+
+            // Assentos para viagem 3 (50 assentos)
+            var seats3 = GenerateSeatsForTrip(trip3Id, 50);
+            foreach (var seat in seats3)
+            {
+                migrationBuilder.InsertData(
+                table: "Seats",
+                columns: new[] { "Id", "TripId", "Number", "Type", "Status", "Row", "Column", "PriceMultiplier", "IsActive", "CreatedAt" },
+                values: seat
+                );
+            }
+
+            // Assentos para viagem 4 (55 assentos)
+            var seats4 = GenerateSeatsForTrip(trip4Id, 55);
+            foreach (var seat in seats4)
+            {
+                migrationBuilder.InsertData(
+                table: "Seats",
+                columns: new[] { "Id", "TripId", "Number", "Type", "Status", "Row", "Column", "PriceMultiplier", "IsActive", "CreatedAt" },
+                values: seat
+                );
+            }
+        }
+
+        private static List<object[]> GenerateSeatsForTrip(Guid tripId, int capacity)
+        {
+            var seats = new List<object[]>();
+            var columns = 4;
+            var rows = (int)Math.Ceiling((double)capacity / columns);
+            var seatCount = 0;
+
+            for (int row = 1; row <= rows; row++)
+            {
+                for (int col = 1; col <= columns; col++)
+                {
+                    if (seatCount >= capacity)
+                        break;
+
+                    var columnLetter = (char)('A' + col - 1);
+                    var number = $"{row}{columnLetter}";
+
+                    int seatType;
+                    if (col == 1 || col == columns)
+                        seatType = 0; // Window
+                    else if (col == 2)
+                        seatType = 1; // Aisle
+                    else
+                        seatType = 2; // Middle
+
+                    decimal priceMultiplier;
+                    if (col == 1 || col == columns)
+                        priceMultiplier = 1.10m;
+                    else if (col == 2)
+                        priceMultiplier = 1.05m;
+                    else
+                        priceMultiplier = 1.00m;
+
+                    int status = 0; // Available
+
+                    if (row == 1 && col == 1)
+                        status = 1; // Reserved - 1A
+                    else if (row == 1 && col == 4)
+                        status = 2; // Sold - 1D
+                    else if (row == 2 && col == 2)
+                        status = 1; // Reserved - 2B
+
+                    seats.Add(new object[]
+                    {
+Guid.NewGuid(),
+tripId,
+number,
+seatType,
+status,
+row,
+col,
+priceMultiplier,
+true,
+Now
+                    });
+
+                    seatCount++;
+                }
+            }
+
+            return seats;
         }
 
         public static void Down(MigrationBuilder migrationBuilder)
         {
-            // Remove os dados inseridos
+            // Remove todos os assentos
+            migrationBuilder.Sql("DELETE FROM Seats");
+
+            // Remove as viagens
             migrationBuilder.DeleteData(
             table: "Trips",
             keyColumn: "Id",
@@ -138,6 +256,7 @@ Guid.Parse("DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD"),
 Guid.Parse("EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE")
             });
 
+            // Remove os ônibus
             migrationBuilder.DeleteData(
             table: "Buses",
             keyColumn: "Id",

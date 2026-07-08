@@ -65,6 +65,7 @@ d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IBusService, BusService>();
         services.AddScoped<ITripService, TripService>();
+        services.AddScoped<ISeatService, SeatService>(); 
 
         services.AddControllers()
 .AddApplicationPart(typeof(TripsController).Assembly);

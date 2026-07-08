@@ -3,6 +3,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Linq.Expressions;
+using TicketSystem.Application.DTOs.Seat;
 using TicketSystem.Application.DTOs.Trip;
 using TicketSystem.Application.Interfaces;
 using TicketSystem.Application.Mappings;
@@ -18,6 +19,8 @@ namespace TicketSystem.Tests.Infrastructure.Services
     {
         private readonly Mock<IRepository<Trip>> _tripRepositoryMock;
         private readonly Mock<IRepository<Bus>> _busRepositoryMock;
+        private readonly Mock<IRepository<Seat>> _seatRepositoryMock;
+        private readonly Mock<ISeatService> _seatServiceMock;
         private readonly IMapper _mapper;
         private readonly TripService _tripService;
 
@@ -25,6 +28,8 @@ namespace TicketSystem.Tests.Infrastructure.Services
         {
             _tripRepositoryMock = new Mock<IRepository<Trip>>();
             _busRepositoryMock = new Mock<IRepository<Bus>>();
+            _seatRepositoryMock = new Mock<IRepository<Seat>>();
+            _seatServiceMock = new Mock<ISeatService>();
 
             var loggerFactory = LoggerFactory.Create(builder => { });
 
@@ -37,6 +42,8 @@ namespace TicketSystem.Tests.Infrastructure.Services
             _tripService = new TripService(
             _tripRepositoryMock.Object,
             _busRepositoryMock.Object,
+            _seatRepositoryMock.Object,
+            _seatServiceMock.Object,
             _mapper);
         }
 
@@ -141,7 +148,7 @@ namespace TicketSystem.Tests.Infrastructure.Services
             var createDto = new CreateTripDto
             {
                 Origin = "São Paulo",
-                Destination = "Maringá",
+                Destination = "Curitiba",
                 DepartureTime = DateTime.UtcNow.AddHours(10),
                 ArrivalTime = DateTime.UtcNow.AddHours(14),
                 BusId = busId,
@@ -172,7 +179,7 @@ namespace TicketSystem.Tests.Infrastructure.Services
             var createDto = new CreateTripDto
             {
                 Origin = "São Paulo",
-                Destination = "Maringá",
+                Destination = "Curitiba",
                 DepartureTime = DateTime.UtcNow.AddHours(10),
                 ArrivalTime = DateTime.UtcNow.AddHours(14),
                 BusId = Guid.NewGuid(),
@@ -188,6 +195,68 @@ namespace TicketSystem.Tests.Infrastructure.Services
             
             await act.Should().ThrowAsync<KeyNotFoundException>()
             .WithMessage($"Ônibus com ID {createDto.BusId} não encontrado");
+        }
+
+        [Fact]
+        public async Task CreateTripWithSeatsAsync_ShouldCreateTripAndGenerateSeats_WhenValid()
+        {
+            
+            var busId = Guid.NewGuid();
+            var bus = new Bus { Id = busId, Capacity = 45 };
+            var createDto = new CreateTripDto
+            {
+                Origin = "São Paulo",
+                Destination = "Curitiba",
+                DepartureTime = DateTime.UtcNow.AddHours(10),
+                ArrivalTime = DateTime.UtcNow.AddHours(14),
+                BusId = busId,
+                Price = 200.00m,
+                Status = TripStatus.Scheduled
+            };
+
+            var createdTrip = new Trip
+            {
+                Id = Guid.NewGuid(),
+                Origin = createDto.Origin,
+                Destination = createDto.Destination,
+                DepartureTime = createDto.DepartureTime,
+                ArrivalTime = createDto.ArrivalTime,
+                BusId = busId,
+                Price = createDto.Price,
+                Status = createDto.Status,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var seats = new List<SeatDto>
+{
+new SeatDto { Id = Guid.NewGuid(), Number = "1A", Status = SeatStatus.Available },
+new SeatDto { Id = Guid.NewGuid(), Number = "1B", Status = SeatStatus.Available }
+};
+
+            _busRepositoryMock.Setup(x => x.ExistsAsync(It.IsAny<Expression<Func<Bus, bool>>>()))
+            .ReturnsAsync(true);
+            _busRepositoryMock.Setup(x => x.GetByIdAsync(busId))
+            .ReturnsAsync(bus);
+            _tripRepositoryMock.Setup(x => x.AddAsync(It.IsAny<Trip>()))
+            .ReturnsAsync(createdTrip);
+            _tripRepositoryMock.Setup(x => x.GetByIdAsync(createdTrip.Id))
+            .ReturnsAsync(createdTrip);
+            _seatServiceMock.Setup(x => x.GenerateSeatsForTripAsync(createdTrip.Id, bus.Capacity))
+            .ReturnsAsync(seats);
+            _seatRepositoryMock.Setup(x => x.FindAsync(It.IsAny<Expression<Func<Seat, bool>>>()))
+            .ReturnsAsync(new List<Seat>());
+
+            
+            var result = await _tripService.CreateTripWithSeatsAsync(createDto);
+
+            
+            result.Should().NotBeNull();
+            result.Origin.Should().Be(createDto.Origin);
+            result.Destination.Should().Be(createDto.Destination);
+            result.Price.Should().Be(createDto.Price);
+            result.Status.Should().Be(createDto.Status);
+            _seatServiceMock.Verify(x => x.GenerateSeatsForTripAsync(createdTrip.Id, bus.Capacity), Times.Once);
         }
 
         [Fact]
@@ -286,6 +355,54 @@ namespace TicketSystem.Tests.Infrastructure.Services
 
             
             Func<Task> act = async () => await _tripService.DeleteTripAsync(tripId);
+
+            
+            await act.Should().ThrowAsync<KeyNotFoundException>()
+            .WithMessage($"Viagem com ID {tripId} não encontrada");
+        }
+
+        [Fact]
+        public async Task GetTripDetailsByIdAsync_ShouldReturnTripWithSeats_WhenTripExists()
+        {
+            
+            var trip = TestData.GetValidTrip();
+            var seats = new List<Seat>
+{
+new Seat { Id = Guid.NewGuid(), Number = "1A", Status = SeatStatus.Available, Row = 1, Column = 1, IsActive = true },
+new Seat { Id = Guid.NewGuid(), Number = "1B", Status = SeatStatus.Available, Row = 1, Column = 2, IsActive = true }
+};
+            trip.Seats = seats;
+
+            _tripRepositoryMock.Setup(x => x.GetByIdAsync(trip.Id))
+            .ReturnsAsync(trip);
+            _busRepositoryMock.Setup(x => x.GetByIdAsync(trip.BusId))
+            .ReturnsAsync(trip.Bus);
+            _seatRepositoryMock.Setup(x => x.FindAsync(It.IsAny<Expression<Func<Seat, bool>>>()))
+            .ReturnsAsync(seats);
+
+            
+            var result = await _tripService.GetTripDetailsByIdAsync(trip.Id);
+
+            
+            result.Should().NotBeNull();
+            result.Id.Should().Be(trip.Id);
+            result.Origin.Should().Be(trip.Origin);
+            result.Destination.Should().Be(trip.Destination);
+            result.Seats.Should().HaveCount(2);
+            result.TotalSeats.Should().Be(2);
+            result.AvailableSeats.Should().Be(2);
+        }
+
+        [Fact]
+        public async Task GetTripDetailsByIdAsync_ShouldThrowException_WhenTripNotFound()
+        {
+            
+            var tripId = Guid.NewGuid();
+            _tripRepositoryMock.Setup(x => x.GetByIdAsync(tripId))
+            .ReturnsAsync((Trip?)null);
+
+            
+            Func<Task> act = async () => await _tripService.GetTripDetailsByIdAsync(tripId);
 
             
             await act.Should().ThrowAsync<KeyNotFoundException>()
