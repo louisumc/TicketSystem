@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 using TicketSystem.Api.Middleware;
 using TicketSystem.Application.Interfaces;
 using TicketSystem.Application.Mappings;
@@ -15,19 +16,29 @@ using TicketSystem.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Database
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Configurar Serilog - Removendo WithMachineName e WithThreadId que precisam de pacotes extras
+Log.Logger = new LoggerConfiguration()
+.ReadFrom.Configuration(builder.Configuration)
+.Enrich.FromLogContext()
+.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+.WriteTo.File("logs/ticketsystem-.txt",
+rollingInterval: RollingInterval.Day,
+outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+.CreateLogger();
 
-//builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//    options.UseSqlServer(
-//        builder.Configuration.GetConnectionString("DefaultConnection"),
-//        sqlOptions => sqlOptions.EnableRetryOnFailure(
-//            maxRetryCount: 5,
-//            maxRetryDelay: TimeSpan.FromSeconds(10),
-//            errorNumbersToAdd: null
-//        )
-//    ));
+builder.Host.UseSerilog();
+
+// Configure Database COM RETRY
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+options.UseSqlServer(
+builder.Configuration.GetConnectionString("DefaultConnection"),
+sqlOptions => sqlOptions.EnableRetryOnFailure(
+maxRetryCount: 5,
+maxRetryDelay: TimeSpan.FromSeconds(10),
+errorNumbersToAdd: null
+)
+));
+
 // Configure AutoMapper
 builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
 
@@ -36,8 +47,6 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateBusDtoValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateTripDtoValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateSeatDtoValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateReservationDtoValidator>();
-
-// ADICIONAR VALIDADORES FALTANTES
 builder.Services.AddValidatorsFromAssemblyContaining<UpdateBusDtoValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<UpdateTripDtoValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<UpdateSeatDtoValidator>();
@@ -54,24 +63,15 @@ builder.Services.AddScoped<ISeatService, SeatService>();
 builder.Services.AddScoped<IPassengerService, PassengerService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 
+// ADICIONAR ESTA LINHA PARA REGISTRAR O LOGGER
+builder.Services.AddLogging();
+
 builder.Services.AddControllers();
 
 // These methods extend IServiceCollection
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Bus.CreateBusDtoValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Bus.UpdateBusDtoValidator>();
-
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Passenger.CreatePassengerDtoValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Passenger.UpdatePassengerDtoValidator>();
-
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Reservation.CreateReservationDtoValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Reservation.ConfirmReservationDtoValidator>();
-
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Seat.CreateSeatDtoValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Seat.UpdateSeatDtoValidator>();
-
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Trip.CreateTripDtoValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Trip.UpdateTripDtoValidator>();
 
 // Configure Authorization
 builder.Services.AddAuthorization();
@@ -84,7 +84,7 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "Ticket System API",
         Version = "v1",
-        Description = "API para gerenciamento de vendas de passagens de ônibus",
+        Description = "API para gerenciamento de vendas de passagens de onibus",
         Contact = new Microsoft.OpenApi.Models.OpenApiContact
         {
             Name = "Ticket System Team",
