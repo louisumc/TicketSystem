@@ -16,29 +16,31 @@ using Xunit;
 
 namespace TicketSystem.Tests.Infrastructure.Services
 {
-	public class ReservationServiceTests
-	{
-		private readonly Mock<IRepository<Reservation>> _reservationRepositoryMock;
-		private readonly Mock<ApplicationDbContext> _contextMock;
-		private readonly Mock<IRepository<Trip>> _tripRepositoryMock;
-		private readonly Mock<IRepository<Seat>> _seatRepositoryMock;
-		private readonly Mock<IRepository<Passenger>> _passengerRepositoryMock;
-		private readonly Mock<IRepository<ReservationSeat>> _reservationSeatRepositoryMock;
-		private readonly Mock<IPassengerService> _passengerServiceMock;
-		private readonly Mock<ILogger<ReservationService>> _loggerMock;
-		private readonly IMapper _mapper;
-		private readonly ReservationService _reservationService;
+    public class ReservationServiceTests
+    {
+        private readonly Mock<IRepository<Reservation>> _reservationRepositoryMock;
+        private readonly Mock<ApplicationDbContext> _contextMock;
+        private readonly Mock<IRepository<Trip>> _tripRepositoryMock;
+        private readonly Mock<IRepository<Seat>> _seatRepositoryMock;
+        private readonly Mock<IRepository<Passenger>> _passengerRepositoryMock;
+        private readonly Mock<IRepository<ReservationSeat>> _reservationSeatRepositoryMock;
+        private readonly Mock<IPassengerService> _passengerServiceMock;
+        private readonly Mock<IDistributedLockService> _lockServiceMock;
+        private readonly Mock<ILogger<ReservationService>> _loggerMock;
+        private readonly IMapper _mapper;
+        private readonly ReservationService _reservationService;
 
-		public ReservationServiceTests()
-		{
-			_reservationRepositoryMock = new Mock<IRepository<Reservation>>();
-			_contextMock = new Mock<ApplicationDbContext>(new DbContextOptions<ApplicationDbContext>());
-			_tripRepositoryMock = new Mock<IRepository<Trip>>();
-			_seatRepositoryMock = new Mock<IRepository<Seat>>();
-			_passengerRepositoryMock = new Mock<IRepository<Passenger>>();
-			_reservationSeatRepositoryMock = new Mock<IRepository<ReservationSeat>>();
-			_passengerServiceMock = new Mock<IPassengerService>();
-			_loggerMock = new Mock<ILogger<ReservationService>>();
+        public ReservationServiceTests()
+        {
+            _reservationRepositoryMock = new Mock<IRepository<Reservation>>();
+            _contextMock = new Mock<ApplicationDbContext>(new DbContextOptions<ApplicationDbContext>());
+            _tripRepositoryMock = new Mock<IRepository<Trip>>();
+            _seatRepositoryMock = new Mock<IRepository<Seat>>();
+            _passengerRepositoryMock = new Mock<IRepository<Passenger>>();
+            _reservationSeatRepositoryMock = new Mock<IRepository<ReservationSeat>>();
+            _passengerServiceMock = new Mock<IPassengerService>();
+            _lockServiceMock = new Mock<IDistributedLockService>();
+            _loggerMock = new Mock<ILogger<ReservationService>>();
 
 			var loggerFactory = LoggerFactory.Create(builder => { });
 
@@ -46,21 +48,22 @@ namespace TicketSystem.Tests.Infrastructure.Services
 			{
 				cfg.AddProfile<MappingProfile>();
 			}, loggerFactory);
-			_mapper = config.CreateMapper();
+            _mapper = config.CreateMapper();
 
-			_reservationService = new ReservationService(
-			_reservationRepositoryMock.Object,
-			_contextMock.Object,
-			_tripRepositoryMock.Object,
-			_seatRepositoryMock.Object,
-			_passengerRepositoryMock.Object,
-			_reservationSeatRepositoryMock.Object,
-			_passengerServiceMock.Object,
-			_mapper,
-			_loggerMock.Object);
-		}
+            _reservationService = new ReservationService(
+            _reservationRepositoryMock.Object,
+            _contextMock.Object,
+            _tripRepositoryMock.Object,
+            _seatRepositoryMock.Object,
+            _passengerRepositoryMock.Object,
+            _reservationSeatRepositoryMock.Object,
+            _passengerServiceMock.Object,
+            _lockServiceMock.Object,
+            _mapper,
+            _loggerMock.Object);
+        }
 
-		[Fact]
+        [Fact]
         public async Task GetReservationByIdAsync_ShouldReturnReservation_WhenExists()
         {
             var reservationId = Guid.NewGuid();
@@ -93,7 +96,7 @@ namespace TicketSystem.Tests.Infrastructure.Services
             Func<Task> act = async () => await _reservationService.GetReservationByIdAsync(reservationId);
 
             await act.Should().ThrowAsync<KeyNotFoundException>()
-            .WithMessage($"Reserva com ID {reservationId} não encontrada");
+            .WithMessage($"Reserva com ID {reservationId} nao encontrada");
         }
 
         [Fact]
@@ -103,9 +106,9 @@ namespace TicketSystem.Tests.Infrastructure.Services
             var trip = new Trip
             {
                 Id = tripId,
-                Origin = "São Paulo",
+                Origin = "Sao Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.Now.AddDays(1),
+                DepartureTime = DateTime.UtcNow.AddDays(1),
                 Bus = new Bus { Capacity = 45 }
             };
             var seats = new List<Seat>

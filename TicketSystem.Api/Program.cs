@@ -13,9 +13,12 @@ using TicketSystem.Application.Validators.Seat;
 using TicketSystem.Application.Validators.Trip;
 using TicketSystem.Infrastructure.Cache;
 using TicketSystem.Infrastructure.Data;
+using TicketSystem.Infrastructure.Health;
+using TicketSystem.Infrastructure.Locks;
 using TicketSystem.Infrastructure.Repositories;
 using TicketSystem.Infrastructure.Services;
 using Scrutor;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,14 +49,21 @@ errorNumbersToAdd: null
 var redisEnabled = builder.Configuration.GetValue<bool>("Redis:Enabled");
 if (redisEnabled)
 {
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
-builder.Services.AddScoped<ICacheService, RedisCacheService>();
+    var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+    builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+    builder.Services.AddScoped<ICacheService, RedisCacheService>();
+    builder.Services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
 }
 else
 {
-builder.Services.AddScoped<ICacheService, NullCacheService>();
+    builder.Services.AddScoped<ICacheService, NullCacheService>();
+    builder.Services.AddScoped<IDistributedLockService, NullDistributedLockService>();
 }
+
+// Health Checks
+builder.Services.AddHealthChecks()
+.AddCheck<RedisHealthCheck>("redis")
+.AddDbContextCheck<ApplicationDbContext>("database");
 
 // Configure AutoMapper
 builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
@@ -100,17 +110,17 @@ builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-{
-Title = "Ticket System API",
-Version = "v1",
-Description = "API para gerenciamento de vendas de passagens de onibus",
-Contact = new Microsoft.OpenApi.Models.OpenApiContact
-{
-Name = "Ticket System Team",
-Email = "support@ticketsystem.com"
-}
-});
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "Ticket System API",
+        Version = "v1",
+        Description = "API para gerenciamento de vendas de passagens de onibus",
+        Contact = new Microsoft.OpenApi.Models.OpenApiContact
+        {
+            Name = "Ticket System Team",
+            Email = "support@ticketsystem.com"
+        }
+    });
 });
 
 var app = builder.Build();
@@ -118,13 +128,16 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-c.SwaggerEndpoint("/swagger/v1/swagger.json", "Ticket System API v1");
-c.RoutePrefix = string.Empty;
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Ticket System API v1");
+        c.RoutePrefix = string.Empty;
+    });
 }
+
+// Health Check endpoint
+app.MapHealthChecks("/health");
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
@@ -134,12 +147,11 @@ app.MapControllers();
 
 using (var scope = app.Services.CreateScope())
 {
-var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-if (dbContext.Database.GetPendingMigrations().Any())
-{
-dbContext.Database.Migrate();
-}
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    if (dbContext.Database.GetPendingMigrations().Any())
+    {
+        dbContext.Database.Migrate();
+    }
 }
 
 app.Run();
-
