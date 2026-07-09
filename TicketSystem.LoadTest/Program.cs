@@ -13,6 +13,8 @@ class Program
         WriteIndented = true
     };
     private static readonly Random _random = new Random();
+    private static readonly int MAX_RETRY_ATTEMPTS = 30;
+    private static readonly int RETRY_DELAY_SECONDS = 2;
 
     static async Task Main(string[] args)
     {
@@ -24,31 +26,74 @@ class Program
         var baseUrl = "http://localhost:5000";
         _httpClient.BaseAddress = new Uri(baseUrl);
 
-        Console.WriteLine("Verificando se a API esta rodando...");
-        try
+        Console.WriteLine("Aguardando API iniciar...");
+
+        var apiReady = await WaitForApiReady(baseUrl);
+        if (!apiReady)
         {
-            var testResponse = await _httpClient.GetAsync("/api/buses");
-            if (!testResponse.IsSuccessStatusCode)
-            {
-                Console.WriteLine("ERRO: API nao esta rodando!");
-                Console.WriteLine("   Status: " + testResponse.StatusCode);
-                Console.WriteLine();
-                Console.WriteLine("Pressione qualquer tecla para sair...");
-                Console.ReadKey();
-                return;
-            }
-            Console.WriteLine("API esta rodando!");
-        }
-        catch
-        {
-            Console.WriteLine("ERRO: API nao esta acessivel!");
+            Console.WriteLine();
+            Console.WriteLine("ERRO: API nao iniciou apos " + (MAX_RETRY_ATTEMPTS * RETRY_DELAY_SECONDS) + " segundos!");
+            Console.WriteLine();
+            Console.WriteLine("Verifique se a API esta rodando:");
+            Console.WriteLine("   cd TicketSystem.Api");
+            Console.WriteLine("   dotnet run --urls=http://localhost:5000");
             Console.WriteLine();
             Console.WriteLine("Pressione qualquer tecla para sair...");
             Console.ReadKey();
             return;
         }
 
+        Console.WriteLine("API esta rodando!");
         Console.WriteLine();
+
+        Console.WriteLine("Verificando status do Redis...");
+        try
+        {
+            var redisResponse = await _httpClient.GetAsync("/api/diagnostics/health");
+            if (redisResponse.IsSuccessStatusCode)
+            {
+                var responseBody = await redisResponse.Content.ReadAsStringAsync();
+                var jsonDoc = JsonDocument.Parse(responseBody);
+                var root = jsonDoc.RootElement;
+
+                if (root.TryGetProperty("data", out var dataElement))
+                {
+                    var redisEnabled = dataElement.TryGetProperty("redisEnabled", out var enabledElement) ? enabledElement.GetBoolean().ToString() : "Nao informado";
+                    var redisConnected = dataElement.TryGetProperty("redisConnected", out var connectedElement) ? connectedElement.GetBoolean().ToString() : "Nao informado";
+                    var redisConfig = dataElement.TryGetProperty("redisConfiguration", out var configElement) ? configElement.GetString() : "Nao informado";
+
+                    Console.WriteLine("Redis Status:");
+                    Console.WriteLine(" Habilitado: " + redisEnabled);
+                    Console.WriteLine(" Conectado: " + redisConnected);
+
+                    if (connectedElement.GetBoolean())
+                    {
+                        Console.WriteLine(" Configuracao: " + redisConfig);
+                        Console.WriteLine(" Redis esta ATIVO! As consultas serao cacheadas.");
+                    }
+                    else
+                    {
+                        Console.WriteLine(" Redis esta DESATIVADO. As consultas vao direto ao banco.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Resposta da API nao contem dados de Redis");
+                    Console.WriteLine("Resposta: " + responseBody);
+                }
+            }
+            else
+            {
+                Console.WriteLine("Nao foi possivel verificar status do Redis (endpoint retornou " + redisResponse.StatusCode + ")");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao verificar Redis: " + ex.Message);
+        }
+
+        Console.WriteLine();
+
         Console.WriteLine("Buscando viagens com assentos disponiveis...");
 
         var trips = await GetTripsWithAvailableSeats();
@@ -161,6 +206,45 @@ class Program
         Console.WriteLine();
         Console.WriteLine("Pressione qualquer tecla para sair...");
         Console.ReadKey();
+    }
+
+    static async Task<bool> WaitForApiReady(string baseUrl)
+    {
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++)
+        {
+            try
+            {
+                Console.Write("   Tentativa " + attempt + "/" + MAX_RETRY_ATTEMPTS + "... ");
+                var response = await _httpClient.GetAsync("/api/buses");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("OK");
+                    return true;
+                }
+
+                Console.WriteLine("Status: " + response.StatusCode);
+            }
+            catch (HttpRequestException)
+            {
+                Console.WriteLine("API nao disponivel");
+            }
+            catch (TaskCanceledException)
+            {
+                Console.WriteLine("Timeout");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Erro: " + ex.Message);
+            }
+
+            if (attempt < MAX_RETRY_ATTEMPTS)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(RETRY_DELAY_SECONDS));
+            }
+        }
+
+        return false;
     }
 
     static async Task<List<TripWithSeats>> GetTripsWithAvailableSeats()
