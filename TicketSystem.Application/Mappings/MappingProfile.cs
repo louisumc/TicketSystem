@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using TicketSystem.Application.DTOs.Bus;
+using TicketSystem.Application.DTOs.Passenger;
 using TicketSystem.Application.DTOs.Seat;
 using TicketSystem.Application.DTOs.Trip;
 using TicketSystem.Domain.Entities;
@@ -10,9 +11,7 @@ namespace TicketSystem.Application.Mappings
     {
         public MappingProfile()
         {
-            // ============================================
             // BUS MAPPINGS
-            // ============================================
             CreateMap<Bus, BusResponseDto>()
             .ForMember(dest => dest.TotalTrips, opt => opt.MapFrom(src => src.Trips.Count(t => t.IsActive)));
 
@@ -28,9 +27,7 @@ namespace TicketSystem.Application.Mappings
             .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
             .ForMember(dest => dest.Trips, opt => opt.Ignore());
 
-            // ============================================
             // TRIP MAPPINGS
-            // ============================================
             CreateMap<Trip, TripResponseDto>()
             .ForMember(dest => dest.BusPlate, opt => opt.MapFrom(src => src.Bus != null ? src.Bus.Plate : string.Empty))
             .ForMember(dest => dest.BusModel, opt => opt.MapFrom(src => src.Bus != null ? src.Bus.Model : string.Empty))
@@ -61,9 +58,22 @@ namespace TicketSystem.Application.Mappings
             .ForMember(dest => dest.Bus, opt => opt.Ignore())
             .ForMember(dest => dest.Seats, opt => opt.Ignore());
 
-            // ============================================
+
+            CreateMap<Passenger, PassengerDto>();
+            CreateMap<CreatePassengerDto, Passenger>()
+            .ForMember(dest => dest.Id, opt => opt.Ignore())
+            .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+            .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+            .ForMember(dest => dest.IsActive, opt => opt.Ignore())
+            .ForMember(dest => dest.Reservations, opt => opt.Ignore());
+
+            CreateMap<UpdatePassengerDto, Passenger>()
+            .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+            .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+            .ForMember(dest => dest.Reservations, opt => opt.Ignore());
+
+
             // SEAT MAPPINGS
-            // ============================================
             CreateMap<Seat, SeatDto>();
 
             CreateMap<CreateSeatDto, Seat>()
@@ -71,12 +81,16 @@ namespace TicketSystem.Application.Mappings
             .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
             .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
             .ForMember(dest => dest.IsActive, opt => opt.Ignore())
-            .ForMember(dest => dest.Trip, opt => opt.Ignore());
+            .ForMember(dest => dest.RowVersion, opt => opt.Ignore())
+            .ForMember(dest => dest.Trip, opt => opt.Ignore())
+            .ForMember(dest => dest.ReservationSeats, opt => opt.Ignore());
 
             CreateMap<UpdateSeatDto, Seat>()
             .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
             .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
-            .ForMember(dest => dest.Trip, opt => opt.Ignore());
+            .ForMember(dest => dest.RowVersion, opt => opt.Ignore())
+            .ForMember(dest => dest.Trip, opt => opt.Ignore())
+            .ForMember(dest => dest.ReservationSeats, opt => opt.Ignore());
         }
     }
 }

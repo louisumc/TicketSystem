@@ -30,6 +30,24 @@ namespace TicketSystem.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Passengers",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Document = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Phone = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETUTCDATE()"),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Passengers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Trips",
                 columns: table => new
                 {
@@ -57,6 +75,38 @@ namespace TicketSystem.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Reservations",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TripId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    PassengerId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ReservationDate = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETUTCDATE()"),
+                    ExpiresAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    TotalAmount = table.Column<decimal>(type: "decimal(10,2)", precision: 10, scale: 2, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETUTCDATE()"),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Reservations", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Reservations_Passengers_PassengerId",
+                        column: x => x.PassengerId,
+                        principalTable: "Passengers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Reservations_Trips_TripId",
+                        column: x => x.TripId,
+                        principalTable: "Trips",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Seats",
                 columns: table => new
                 {
@@ -70,6 +120,7 @@ namespace TicketSystem.Infrastructure.Migrations
                     PassengerName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     PassengerDocument = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
                     PriceMultiplier = table.Column<decimal>(type: "decimal(5,2)", precision: 5, scale: 2, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETUTCDATE()"),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true)
@@ -85,6 +136,35 @@ namespace TicketSystem.Infrastructure.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "ReservationSeats",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ReservationId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    SeatId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Price = table.Column<decimal>(type: "decimal(10,2)", precision: 10, scale: 2, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETUTCDATE()"),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ReservationSeats", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ReservationSeats_Reservations_ReservationId",
+                        column: x => x.ReservationId,
+                        principalTable: "Reservations",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_ReservationSeats_Seats_SeatId",
+                        column: x => x.SeatId,
+                        principalTable: "Seats",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_Buses_Company",
                 table: "Buses",
@@ -94,6 +174,48 @@ namespace TicketSystem.Infrastructure.Migrations
                 name: "IX_Buses_Plate",
                 table: "Buses",
                 column: "Plate",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Passengers_Document",
+                table: "Passengers",
+                column: "Document",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Passengers_Email",
+                table: "Passengers",
+                column: "Email");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reservations_ExpiresAt",
+                table: "Reservations",
+                column: "ExpiresAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reservations_PassengerId",
+                table: "Reservations",
+                column: "PassengerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reservations_Status",
+                table: "Reservations",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Reservations_TripId",
+                table: "Reservations",
+                column: "TripId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ReservationSeats_ReservationId",
+                table: "ReservationSeats",
+                column: "ReservationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ReservationSeats_SeatId",
+                table: "ReservationSeats",
+                column: "SeatId",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -142,7 +264,16 @@ namespace TicketSystem.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "ReservationSeats");
+
+            migrationBuilder.DropTable(
+                name: "Reservations");
+
+            migrationBuilder.DropTable(
                 name: "Seats");
+
+            migrationBuilder.DropTable(
+                name: "Passengers");
 
             migrationBuilder.DropTable(
                 name: "Trips");

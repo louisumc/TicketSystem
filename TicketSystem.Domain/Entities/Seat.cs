@@ -34,7 +34,10 @@ namespace TicketSystem.Domain.Entities
 
         public decimal? PriceMultiplier { get; set; }
 
-        // Navigation property
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         public virtual Trip Trip { get; set; } = null!;
+        public virtual ICollection<ReservationSeat> ReservationSeats { get; set; } = new List<ReservationSeat>();
     }
 }

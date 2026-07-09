@@ -12,8 +12,8 @@ using TicketSystem.Infrastructure.Data;
 namespace TicketSystem.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260708220216_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260709014552_SeedDevelopmentData")]
+    partial class SeedDevelopmentData
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -74,6 +74,155 @@ namespace TicketSystem.Infrastructure.Migrations
                     b.ToTable("Buses", (string)null);
                 });
 
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Passenger", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("Document")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Document")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Passengers_Document");
+
+                    b.HasIndex("Email")
+                        .HasDatabaseName("IX_Passengers_Email");
+
+                    b.ToTable("Passengers", (string)null);
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Reservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<Guid>("PassengerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ReservationDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_Reservations_ExpiresAt");
+
+                    b.HasIndex("PassengerId")
+                        .HasDatabaseName("IX_Reservations_PassengerId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_Reservations_Status");
+
+                    b.HasIndex("TripId")
+                        .HasDatabaseName("IX_Reservations_TripId");
+
+                    b.ToTable("Reservations", (string)null);
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.ReservationSeat", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<Guid>("ReservationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SeatId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReservationId")
+                        .HasDatabaseName("IX_ReservationSeats_ReservationId");
+
+                    b.HasIndex("SeatId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ReservationSeats_SeatId");
+
+                    b.ToTable("ReservationSeats", (string)null);
+                });
+
             modelBuilder.Entity("TicketSystem.Domain.Entities.Seat", b =>
                 {
                     b.Property<Guid>("Id")
@@ -112,6 +261,11 @@ namespace TicketSystem.Infrastructure.Migrations
 
                     b.Property<int>("Row")
                         .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -205,6 +359,44 @@ namespace TicketSystem.Infrastructure.Migrations
                     b.ToTable("Trips", (string)null);
                 });
 
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Reservation", b =>
+                {
+                    b.HasOne("TicketSystem.Domain.Entities.Passenger", "Passenger")
+                        .WithMany("Reservations")
+                        .HasForeignKey("PassengerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystem.Domain.Entities.Trip", "Trip")
+                        .WithMany()
+                        .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Passenger");
+
+                    b.Navigation("Trip");
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.ReservationSeat", b =>
+                {
+                    b.HasOne("TicketSystem.Domain.Entities.Reservation", "Reservation")
+                        .WithMany("ReservationSeats")
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TicketSystem.Domain.Entities.Seat", "Seat")
+                        .WithMany("ReservationSeats")
+                        .HasForeignKey("SeatId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Reservation");
+
+                    b.Navigation("Seat");
+                });
+
             modelBuilder.Entity("TicketSystem.Domain.Entities.Seat", b =>
                 {
                     b.HasOne("TicketSystem.Domain.Entities.Trip", "Trip")
@@ -230,6 +422,21 @@ namespace TicketSystem.Infrastructure.Migrations
             modelBuilder.Entity("TicketSystem.Domain.Entities.Bus", b =>
                 {
                     b.Navigation("Trips");
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Passenger", b =>
+                {
+                    b.Navigation("Reservations");
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Reservation", b =>
+                {
+                    b.Navigation("ReservationSeats");
+                });
+
+            modelBuilder.Entity("TicketSystem.Domain.Entities.Seat", b =>
+                {
+                    b.Navigation("ReservationSeats");
                 });
 
             modelBuilder.Entity("TicketSystem.Domain.Entities.Trip", b =>

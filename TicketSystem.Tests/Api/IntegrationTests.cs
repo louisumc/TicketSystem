@@ -34,7 +34,7 @@ namespace TicketSystem.Tests.Api
             {
                 services.AddDbContext<ApplicationDbContext>(options =>
                 {
-                    options.UseInMemoryDatabase($"TicketSystemTestDb_{Guid.NewGuid():N}");
+                    options.UseInMemoryDatabase("TicketSystemTestDb");
                 });
 
                 var loggerFactory = LoggerFactory.Create(builder => { });
@@ -47,6 +47,9 @@ namespace TicketSystem.Tests.Api
                 services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
                 services.AddScoped<IBusService, BusService>();
                 services.AddScoped<ITripService, TripService>();
+                services.AddScoped<ISeatService, SeatService>();
+                services.AddScoped<IPassengerService, PassengerService>();
+                services.AddScoped<IReservationService, ReservationService>();
 
                 services.AddControllers()
     .AddApplicationPart(typeof(BusesController).Assembly);
