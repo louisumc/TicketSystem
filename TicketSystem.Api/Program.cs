@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
 using StackExchange.Redis;
 using TicketSystem.Api.Middleware;
@@ -15,10 +16,11 @@ using TicketSystem.Infrastructure.Cache;
 using TicketSystem.Infrastructure.Data;
 using TicketSystem.Infrastructure.Health;
 using TicketSystem.Infrastructure.Locks;
+using TicketSystem.Infrastructure.Messaging;
+using TicketSystem.Infrastructure.Messaging.Consumers;
 using TicketSystem.Infrastructure.Repositories;
 using TicketSystem.Infrastructure.Services;
 using Scrutor;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +62,17 @@ else
     builder.Services.AddScoped<IDistributedLockService, NullDistributedLockService>();
 }
 
+// Configure RabbitMQ
+var rabbitMQEnabled = builder.Configuration.GetValue<bool>("RabbitMQ:Enabled", false);
+if (rabbitMQEnabled)
+{
+    builder.Services.AddSingleton<IEventPublisher, RabbitMQEventPublisher>();
+}
+else
+{
+    builder.Services.AddSingleton<IEventPublisher, NullEventPublisher>();
+}
+
 // Health Checks
 builder.Services.AddHealthChecks()
 .AddCheck<RedisHealthCheck>("redis")
@@ -86,6 +99,7 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IBusService, BusService>();
 builder.Services.AddScoped<ISeatService, SeatService>();
 builder.Services.AddScoped<IPassengerService, PassengerService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 // Registra TripService e CacheTripService
 builder.Services.AddScoped<ITripService, TripService>();
@@ -94,6 +108,14 @@ builder.Services.Decorate<ITripService, CacheTripService>();
 // Registra ReservationService e CacheReservationService
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.Decorate<IReservationService, CacheReservationService>();
+
+// Registra consumers como hosted services
+if (rabbitMQEnabled)
+{
+    builder.Services.AddHostedService<ReservationConfirmedConsumer>();
+    builder.Services.AddHostedService<PaymentFailedConsumer>();
+    builder.Services.AddHostedService<TicketGeneratedConsumer>();
+}
 
 builder.Services.AddLogging();
 

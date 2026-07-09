@@ -23,6 +23,14 @@ class Program
         Console.WriteLine("========================================");
         Console.WriteLine();
 
+        Console.WriteLine("ATENCAO: Durante o teste, pausas serao feitas para:");
+        Console.WriteLine("   - Verificar filas no RabbitMQ (http://localhost:15672)");
+        Console.WriteLine("   - Verificar cache no Redis (redis-cli)");
+        Console.WriteLine("   - Verificar dados no SQL Server");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para continuar...");
+        Console.ReadLine();
+
         var baseUrl = "http://localhost:5000";
         _httpClient.BaseAddress = new Uri(baseUrl);
 
@@ -34,10 +42,6 @@ class Program
             Console.WriteLine();
             Console.WriteLine("ERRO: API nao iniciou apos " + (MAX_RETRY_ATTEMPTS * RETRY_DELAY_SECONDS) + " segundos!");
             Console.WriteLine();
-            Console.WriteLine("Verifique se a API esta rodando:");
-            Console.WriteLine("   cd TicketSystem.Api");
-            Console.WriteLine("   dotnet run --urls=http://localhost:5000");
-            Console.WriteLine();
             Console.WriteLine("Pressione qualquer tecla para sair...");
             Console.ReadKey();
             return;
@@ -46,54 +50,9 @@ class Program
         Console.WriteLine("API esta rodando!");
         Console.WriteLine();
 
-        Console.WriteLine("Verificando status do Redis...");
-        try
-        {
-            var redisResponse = await _httpClient.GetAsync("/api/diagnostics/health");
-            if (redisResponse.IsSuccessStatusCode)
-            {
-                var responseBody = await redisResponse.Content.ReadAsStringAsync();
-                var jsonDoc = JsonDocument.Parse(responseBody);
-                var root = jsonDoc.RootElement;
-
-                if (root.TryGetProperty("data", out var dataElement))
-                {
-                    var redisEnabled = dataElement.TryGetProperty("redisEnabled", out var enabledElement) ? enabledElement.GetBoolean().ToString() : "Nao informado";
-                    var redisConnected = dataElement.TryGetProperty("redisConnected", out var connectedElement) ? connectedElement.GetBoolean().ToString() : "Nao informado";
-                    var redisConfig = dataElement.TryGetProperty("redisConfiguration", out var configElement) ? configElement.GetString() : "Nao informado";
-
-                    Console.WriteLine("Redis Status:");
-                    Console.WriteLine(" Habilitado: " + redisEnabled);
-                    Console.WriteLine(" Conectado: " + redisConnected);
-
-                    if (connectedElement.GetBoolean())
-                    {
-                        Console.WriteLine(" Configuracao: " + redisConfig);
-                        Console.WriteLine(" Redis esta ATIVO! As consultas serao cacheadas.");
-                    }
-                    else
-                    {
-                        Console.WriteLine(" Redis esta DESATIVADO. As consultas vao direto ao banco.");
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Resposta da API nao contem dados de Redis");
-                    Console.WriteLine("Resposta: " + responseBody);
-                }
-            }
-            else
-            {
-                Console.WriteLine("Nao foi possivel verificar status do Redis (endpoint retornou " + redisResponse.StatusCode + ")");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Erro ao verificar Redis: " + ex.Message);
-        }
+        await CheckServicesStatus();
 
         Console.WriteLine();
-
         Console.WriteLine("Buscando viagens com assentos disponiveis...");
 
         var trips = await GetTripsWithAvailableSeats();
@@ -135,6 +94,15 @@ class Program
         Console.WriteLine("   Assentos para teste: " + string.Join(", ", availableSeats));
 
         Console.WriteLine();
+        Console.WriteLine("PAUSA: Verifique as filas no RabbitMQ antes de comecar:");
+        Console.WriteLine("   http://localhost:15672");
+        Console.WriteLine("   Usuario: guest / Senha: guest");
+        Console.WriteLine("   Filas: reservation.created, reservation.confirmed, payment.failed, ticket.generated");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER quando estiver pronto para continuar...");
+        Console.ReadLine();
+
+        Console.WriteLine();
         Console.WriteLine("========================================");
         Console.WriteLine("   TESTE 1: MESMO ASSENTO");
         Console.WriteLine("   10 usuarios tentando reservar o assento " + availableSeats[0]);
@@ -142,6 +110,14 @@ class Program
         Console.WriteLine();
 
         await TestSameSeat(trip.Id, availableSeats[0]);
+
+        Console.WriteLine();
+        Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 1:");
+        Console.WriteLine("   Fila: reservation.created - deve ter 1 mensagem");
+        Console.WriteLine("   Fila: reservation.confirmed - deve estar vazia (consumidor processou)");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para continuar...");
+        Console.ReadLine();
 
         Console.WriteLine();
         Console.WriteLine("Atualizando lista de assentos disponiveis apos Teste 1...");
@@ -166,6 +142,14 @@ class Program
         Console.WriteLine();
 
         await TestDifferentSeats(trip.Id, seatsForTest2);
+
+        Console.WriteLine();
+        Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 2:");
+        Console.WriteLine("   Fila: reservation.created - deve ter +4 mensagens");
+        Console.WriteLine("   Fila: reservation.confirmed - deve estar vazia");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para continuar...");
+        Console.ReadLine();
 
         Console.WriteLine();
         Console.WriteLine("Atualizando lista de assentos disponiveis apos Teste 2...");
@@ -200,9 +184,24 @@ class Program
         await TestConcurrentConfirmations(trip.Id, new List<string> { seatForTest3 });
 
         Console.WriteLine();
+        Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 3:");
+        Console.WriteLine("   Fila: reservation.confirmed - deve ter 1 mensagem (apos pagamento)");
+        Console.WriteLine("   Fila: ticket.generated - deve ter 1 mensagem (bilhete gerado)");
+        Console.WriteLine();
+        Console.WriteLine("Pressione ENTER para finalizar...");
+        Console.ReadLine();
+
+        Console.WriteLine();
         Console.WriteLine("========================================");
         Console.WriteLine("   TESTES FINALIZADOS");
         Console.WriteLine("========================================");
+        Console.WriteLine();
+        Console.WriteLine("Resumo:");
+        Console.WriteLine("   - Teste 1: 10 usuarios, 1 reserva (concorrencia)");
+        Console.WriteLine("   - Teste 2: 4 usuarios, 4 reservas (assentos diferentes)");
+        Console.WriteLine("   - Teste 3: 5 usuarios, 1 confirmacao (concorrencia)");
+        Console.WriteLine();
+        Console.WriteLine("Verifique as filas do RabbitMQ para ver os eventos processados.");
         Console.WriteLine();
         Console.WriteLine("Pressione qualquer tecla para sair...");
         Console.ReadKey();
@@ -245,6 +244,57 @@ class Program
         }
 
         return false;
+    }
+
+    static async Task CheckServicesStatus()
+    {
+        Console.WriteLine("Verificando status dos servicos...");
+        Console.WriteLine();
+
+        try
+        {
+            var redisResponse = await _httpClient.GetAsync("/api/diagnostics/health");
+            if (redisResponse.IsSuccessStatusCode)
+            {
+                var result = await redisResponse.Content.ReadFromJsonAsync<RedisHealthResponse>();
+                if (result != null && result.Data != null)
+                {
+                    Console.WriteLine("Redis:");
+                    Console.WriteLine("   Habilitado: " + result.Data.RedisEnabled);
+                    Console.WriteLine("   Conectado: " + result.Data.RedisConnected);
+                    if (result.Data.RedisConnected)
+                    {
+                        Console.WriteLine("   Status: OK");
+                    }
+                    else
+                    {
+                        Console.WriteLine("   Status: OFFLINE");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("Redis: Nao foi possivel verificar (endpoint nao disponivel)");
+            }
+        }
+        catch
+        {
+            Console.WriteLine("Redis: Nao disponivel");
+        }
+
+        try
+        {
+            using var tcpClient = new System.Net.Sockets.TcpClient();
+            await tcpClient.ConnectAsync("localhost", 5672);
+            Console.WriteLine("RabbitMQ: Conectado (porta 5672)");
+            tcpClient.Close();
+        }
+        catch
+        {
+            Console.WriteLine("RabbitMQ: Nao disponivel (porta 5672)");
+        }
+
+        Console.WriteLine();
     }
 
     static async Task<List<TripWithSeats>> GetTripsWithAvailableSeats()
@@ -627,6 +677,21 @@ class Program
             Console.WriteLine("Excecao ao criar reserva: " + ex.Message);
             return null;
         }
+    }
+
+    public class RedisHealthResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public RedisHealthData? Data { get; set; }
+    }
+
+    public class RedisHealthData
+    {
+        public bool RedisEnabled { get; set; }
+        public bool RedisConnected { get; set; }
+        public string RedisConfiguration { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
     }
 
     public class ApiResponse<T>

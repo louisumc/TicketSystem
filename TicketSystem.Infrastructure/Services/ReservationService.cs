@@ -1,9 +1,11 @@
 ﻿using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Data;
 using TicketSystem.Application.DTOs.Reservation;
 using TicketSystem.Application.DTOs.Seat;
+using TicketSystem.Application.Events;
 using TicketSystem.Application.Interfaces;
 using TicketSystem.Domain.Entities;
 using TicketSystem.Domain.Enums;
@@ -23,6 +25,7 @@ namespace TicketSystem.Infrastructure.Services
         private readonly IDistributedLockService _lockService;
         private readonly IMapper _mapper;
         private readonly ILogger<ReservationService> _logger;
+        private readonly IServiceProvider _serviceProvider;
         private const int EXPIRATION_MINUTES = 15;
 
         public ReservationService(
@@ -35,7 +38,8 @@ namespace TicketSystem.Infrastructure.Services
         IPassengerService passengerService,
         IDistributedLockService lockService,
         IMapper mapper,
-        ILogger<ReservationService> logger)
+        ILogger<ReservationService> logger,
+        IServiceProvider serviceProvider)
         : base(reservationRepository)
         {
             _context = context;
@@ -47,6 +51,7 @@ namespace TicketSystem.Infrastructure.Services
             _lockService = lockService;
             _mapper = mapper;
             _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<ReservationDto> CreateReservationAsync(CreateReservationDto createDto)
@@ -182,6 +187,39 @@ namespace TicketSystem.Infrastructure.Services
 
                     await transaction.CommitAsync();
                     _logger.LogInformation("Transacao confirmada. ReservationId: {ReservationId}", createdReservation.Id);
+
+                    // ============================================
+                    // PUBLICAR EVENTO DE RESERVA CRIADA
+                    // ============================================
+                    try
+                    {
+                        var eventPublisher = _serviceProvider.GetRequiredService<IEventPublisher>();
+
+                        var createdEvent = new ReservationCreatedEvent
+                        {
+                            ReservationId = createdReservation.Id,
+                            TripId = trip.Id,
+                            PassengerId = passenger.Id,
+                            PassengerName = passenger.Name,
+                            PassengerEmail = passenger.Email,
+                            PassengerDocument = passenger.Document,
+                            SeatNumbers = seatNumbers,
+                            TotalAmount = totalAmount,
+                            ReservationDate = reservation.ReservationDate,
+                            ExpiresAt = reservation.ExpiresAt,
+                            TripOrigin = trip.Origin,
+                            TripDestination = trip.Destination,
+                            TripDepartureTime = trip.DepartureTime,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        await eventPublisher.PublishAsync(createdEvent);
+                        _logger.LogInformation("Evento ReservationCreatedEvent publicado. ReservationId: {ReservationId}", createdReservation.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Erro ao publicar evento ReservationCreatedEvent. ReservationId: {ReservationId}", createdReservation.Id);
+                    }
 
                     return await GetReservationByIdAsync(createdReservation.Id);
                 }
