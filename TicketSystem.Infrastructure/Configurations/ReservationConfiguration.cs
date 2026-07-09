@@ -14,7 +14,7 @@ namespace TicketSystem.Infrastructure.Configurations
 
             builder.Property(r => r.ReservationDate)
             .IsRequired()
-            .HasDefaultValueSql("GETUTCDATE()");
+            .HasDefaultValueSql("GETDATE()");
 
             builder.Property(r => r.ExpiresAt)
             .IsRequired();
@@ -29,7 +29,7 @@ namespace TicketSystem.Infrastructure.Configurations
 
             builder.Property(r => r.CreatedAt)
             .IsRequired()
-            .HasDefaultValueSql("GETUTCDATE()");
+            .HasDefaultValueSql("GETDATE()");
 
             builder.Property(r => r.IsActive)
             .IsRequired()

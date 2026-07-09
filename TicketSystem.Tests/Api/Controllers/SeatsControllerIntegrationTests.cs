@@ -102,7 +102,7 @@ namespace TicketSystem.Tests.Api.Controllers
             _dbContext.Seats.RemoveRange(_dbContext.Seats);
             _dbContext.SaveChanges();
 
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
 
             var bus = new Bus
             {

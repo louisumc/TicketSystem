@@ -152,7 +152,7 @@ namespace TicketSystem.Tests.Infrastructure.Services
                 PassengerId = passenger.Id,
                 TripId = tripId,
                 Status = ReservationStatus.Pending,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+                ExpiresAt = DateTime.Now.AddMinutes(10)
             };
 
             _passengerRepositoryMock.Setup(x => x.FindAsync(It.IsAny<Expression<Func<Passenger, bool>>>()))

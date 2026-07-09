@@ -21,7 +21,7 @@ namespace TicketSystem.Tests.Domain
             bus.Company.Should().Be("Viação Expresso");
             bus.Capacity.Should().Be(45);
             bus.IsActive.Should().BeTrue();
-            bus.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
+            bus.CreatedAt.Should().BeCloseTo(DateTime.Now, TimeSpan.FromSeconds(1));
         }
 
         [Fact]
@@ -33,7 +33,7 @@ namespace TicketSystem.Tests.Domain
              
             bus.Id.Should().NotBeEmpty();
             bus.IsActive.Should().BeTrue();
-            bus.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
+            bus.CreatedAt.Should().BeCloseTo(DateTime.Now, TimeSpan.FromSeconds(1));
             bus.UpdatedAt.Should().BeNull();
             bus.Trips.Should().BeEmpty();
         }
@@ -46,7 +46,7 @@ namespace TicketSystem.Tests.Domain
             var originalDate = bus.CreatedAt;
 
             
-            bus.UpdatedAt = DateTime.UtcNow;
+            bus.UpdatedAt = DateTime.Now;
             bus.IsActive = false;
 
             

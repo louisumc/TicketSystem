@@ -151,8 +151,8 @@ namespace TicketSystem.Tests.Application.Mappings
             {
                 Origin = "São Paulo",
                 Destination = "Maringá",
-                DepartureTime = DateTime.UtcNow.AddHours(10),
-                ArrivalTime = DateTime.UtcNow.AddHours(14),
+                DepartureTime = DateTime.Now.AddHours(10),
+                ArrivalTime = DateTime.Now.AddHours(14),
                 BusId = busId,
                 Price = 200.00m,
                 Status = TripStatus.Scheduled
@@ -183,8 +183,8 @@ namespace TicketSystem.Tests.Application.Mappings
                 Id = tripId,
                 Origin = "Updated Origin",
                 Destination = "Updated Destination",
-                DepartureTime = DateTime.UtcNow.AddHours(12),
-                ArrivalTime = DateTime.UtcNow.AddHours(16),
+                DepartureTime = DateTime.Now.AddHours(12),
+                ArrivalTime = DateTime.Now.AddHours(16),
                 BusId = busId,
                 Price = 250.00m,
                 Status = TripStatus.InProgress,

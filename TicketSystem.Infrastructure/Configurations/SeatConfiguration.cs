@@ -41,7 +41,7 @@ builder.Property(s => s.PriceMultiplier)
 
 builder.Property(s => s.CreatedAt)
 .IsRequired()
-.HasDefaultValueSql("GETUTCDATE()");
+.HasDefaultValueSql("GETDATE()");
 
 builder.Property(s => s.IsActive)
 .IsRequired()

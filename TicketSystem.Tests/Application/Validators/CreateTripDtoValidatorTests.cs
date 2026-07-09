@@ -24,8 +24,8 @@ namespace TicketSystem.Tests.Application.Validators
             {
                 Origin = "São Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddHours(8),
-                ArrivalTime = DateTime.UtcNow.AddHours(11),
+                DepartureTime = DateTime.Now.AddHours(8),
+                ArrivalTime = DateTime.Now.AddHours(11),
                 BusId = Guid.NewGuid(),
                 Price = 120.00m,
                 Status = TripStatus.Scheduled
@@ -46,8 +46,8 @@ namespace TicketSystem.Tests.Application.Validators
             {
                 Origin = "",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddHours(8),
-                ArrivalTime = DateTime.UtcNow.AddHours(11),
+                DepartureTime = DateTime.Now.AddHours(8),
+                ArrivalTime = DateTime.Now.AddHours(11),
                 BusId = Guid.NewGuid(),
                 Price = 120.00m
             };
@@ -68,8 +68,8 @@ namespace TicketSystem.Tests.Application.Validators
             {
                 Origin = "São Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddHours(-1),
-                ArrivalTime = DateTime.UtcNow.AddHours(2),
+                DepartureTime = DateTime.Now.AddHours(-1),
+                ArrivalTime = DateTime.Now.AddHours(2),
                 BusId = Guid.NewGuid(),
                 Price = 120.00m
             };
@@ -90,8 +90,8 @@ namespace TicketSystem.Tests.Application.Validators
             {
                 Origin = "São Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddHours(8),
-                ArrivalTime = DateTime.UtcNow.AddHours(5),
+                DepartureTime = DateTime.Now.AddHours(8),
+                ArrivalTime = DateTime.Now.AddHours(5),
                 BusId = Guid.NewGuid(),
                 Price = 120.00m
             };
@@ -112,8 +112,8 @@ namespace TicketSystem.Tests.Application.Validators
             {
                 Origin = "São Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddHours(8),
-                ArrivalTime = DateTime.UtcNow.AddHours(11),
+                DepartureTime = DateTime.Now.AddHours(8),
+                ArrivalTime = DateTime.Now.AddHours(11),
                 BusId = Guid.NewGuid(),
                 Price = 0
             };
@@ -134,8 +134,8 @@ namespace TicketSystem.Tests.Application.Validators
             {
                 Origin = "São Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddHours(8),
-                ArrivalTime = DateTime.UtcNow.AddHours(11),
+                DepartureTime = DateTime.Now.AddHours(8),
+                ArrivalTime = DateTime.Now.AddHours(11),
                 BusId = Guid.Empty,
                 Price = 120.00m
             };

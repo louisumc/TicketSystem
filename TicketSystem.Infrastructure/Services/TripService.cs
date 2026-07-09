@@ -126,7 +126,7 @@ namespace TicketSystem.Infrastructure.Services
             if (createTripDto.ArrivalTime <= createTripDto.DepartureTime)
                 throw new InvalidOperationException("A data de chegada deve ser posterior à data de partida");
 
-            if (createTripDto.DepartureTime <= DateTime.UtcNow)
+            if (createTripDto.DepartureTime <= DateTime.Now)
                 throw new InvalidOperationException("A data de partida deve ser futura");
 
             var trip = _mapper.Map<Trip>(createTripDto);
@@ -170,7 +170,7 @@ namespace TicketSystem.Infrastructure.Services
             if (updateTripDto.ArrivalTime <= updateTripDto.DepartureTime)
                 throw new InvalidOperationException("A data de chegada deve ser posterior à data de partida");
 
-            if (updateTripDto.DepartureTime <= DateTime.UtcNow)
+            if (updateTripDto.DepartureTime <= DateTime.Now)
                 throw new InvalidOperationException("A data de partida deve ser futura");
 
             _mapper.Map(updateTripDto, trip);

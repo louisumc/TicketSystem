@@ -10,7 +10,7 @@
         protected BaseEntity()
         {
             Id = Guid.NewGuid();
-            CreatedAt = DateTime.UtcNow;
+            CreatedAt = DateTime.Now;
             IsActive = true;
         }
     }

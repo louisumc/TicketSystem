@@ -99,7 +99,7 @@ namespace TicketSystem.Infrastructure.Services
                 throw new InvalidOperationException("Não é possível excluir um ônibus com viagens ativas");
 
             bus.IsActive = false;
-            bus.UpdatedAt = DateTime.UtcNow;
+            bus.UpdatedAt = DateTime.Now;
             await _repository.UpdateAsync(bus);
         }
 

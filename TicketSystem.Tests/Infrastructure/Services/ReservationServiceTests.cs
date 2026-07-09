@@ -102,7 +102,7 @@ namespace TicketSystem.Tests.Infrastructure.Services
                 Id = tripId,
                 Origin = "São Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddDays(1),
+                DepartureTime = DateTime.Now.AddDays(1),
                 Bus = new Bus { Capacity = 45 }
             };
             var seats = new List<Seat>

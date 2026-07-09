@@ -45,7 +45,7 @@ namespace TicketSystem.Infrastructure.Services
                 Email = passengerInfo.Email,
                 Phone = passengerInfo.Phone,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             return await _repository.AddAsync(newPassenger);
@@ -69,7 +69,7 @@ namespace TicketSystem.Infrastructure.Services
             r.PassengerId == passenger.Id &&
             r.TripId == tripId &&
             r.Status == ReservationStatus.Pending &&
-            r.ExpiresAt > DateTime.UtcNow);
+            r.ExpiresAt > DateTime.Now);
 
             return reservations.Any();
         }
@@ -87,7 +87,7 @@ namespace TicketSystem.Infrastructure.Services
                 Email = createDto.Email,
                 Phone = createDto.Phone,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             var created = await _repository.AddAsync(passenger);
@@ -109,7 +109,7 @@ namespace TicketSystem.Infrastructure.Services
             passenger.Email = updateDto.Email;
             passenger.Phone = updateDto.Phone;
             passenger.IsActive = updateDto.IsActive;
-            passenger.UpdatedAt = DateTime.UtcNow;
+            passenger.UpdatedAt = DateTime.Now;
 
             await _repository.UpdateAsync(passenger);
             return MapToDto(passenger);
@@ -126,7 +126,7 @@ namespace TicketSystem.Infrastructure.Services
                 throw new InvalidOperationException("Não é possível excluir um passageiro com reservas ativas");
 
             passenger.IsActive = false;
-            passenger.UpdatedAt = DateTime.UtcNow;
+            passenger.UpdatedAt = DateTime.Now;
             await _repository.UpdateAsync(passenger);
         }
 

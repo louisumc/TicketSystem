@@ -19,6 +19,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+//builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//    options.UseSqlServer(
+//        builder.Configuration.GetConnectionString("DefaultConnection"),
+//        sqlOptions => sqlOptions.EnableRetryOnFailure(
+//            maxRetryCount: 5,
+//            maxRetryDelay: TimeSpan.FromSeconds(10),
+//            errorNumbersToAdd: null
+//        )
+//    ));
 // Configure AutoMapper
 builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
 
@@ -51,6 +60,18 @@ builder.Services.AddControllers();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Bus.CreateBusDtoValidator>();
 builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Bus.UpdateBusDtoValidator>();
+
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Passenger.CreatePassengerDtoValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Passenger.UpdatePassengerDtoValidator>();
+
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Reservation.CreateReservationDtoValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Reservation.ConfirmReservationDtoValidator>();
+
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Seat.CreateSeatDtoValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Seat.UpdateSeatDtoValidator>();
+
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Trip.CreateTripDtoValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<TicketSystem.Application.Validators.Trip.UpdateTripDtoValidator>();
 
 // Configure Authorization
 builder.Services.AddAuthorization();

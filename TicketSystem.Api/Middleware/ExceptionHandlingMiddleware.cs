@@ -75,7 +75,7 @@ namespace TicketSystem.Api.Middleware
                     break;
             }
 
-            apiResponse.Timestamp = DateTime.UtcNow;
+            apiResponse.Timestamp = DateTime.Now;
 
             var jsonResponse = JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions
             {

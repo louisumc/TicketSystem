@@ -20,7 +20,7 @@ namespace TicketSystem.Application.Validators.Trip
 
             RuleFor(x => x.DepartureTime)
                 .NotEmpty().WithMessage("A data de partida é obrigatória")
-                .GreaterThan(DateTime.UtcNow).WithMessage("A data de partida deve ser futura");
+                .GreaterThan(DateTime.Now).WithMessage("A data de partida deve ser futura");
 
             RuleFor(x => x.ArrivalTime)
                 .NotEmpty().WithMessage("A data de chegada é obrigatória")

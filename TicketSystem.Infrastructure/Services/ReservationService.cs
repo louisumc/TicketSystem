@@ -58,7 +58,7 @@ namespace TicketSystem.Infrastructure.Services
                     if (trip.Status == TripStatus.Completed || trip.Status == TripStatus.Cancelled)
                         throw new InvalidOperationException("Não é possível reservar assentos para uma viagem finalizada ou cancelada");
 
-                    if (trip.DepartureTime <= DateTime.UtcNow)
+                    if (trip.DepartureTime <= DateTime.Now)
                         throw new InvalidOperationException("Não é possível reservar assentos para uma viagem que já partiu");
 
                     var passenger = await _passengerService.GetOrCreatePassengerAsync(createDto.Passenger);
@@ -94,12 +94,12 @@ namespace TicketSystem.Infrastructure.Services
                     {
                         TripId = trip.Id,
                         PassengerId = passenger.Id,
-                        ReservationDate = DateTime.UtcNow,
-                        ExpiresAt = DateTime.UtcNow.AddMinutes(EXPIRATION_MINUTES),
+                        ReservationDate = DateTime.Now,
+                        ExpiresAt = DateTime.Now.AddMinutes(EXPIRATION_MINUTES),
                         Status = ReservationStatus.Pending,
                         TotalAmount = totalAmount,
                         IsActive = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     };
 
                     var createdReservation = await _repository.AddAsync(reservation);
@@ -109,7 +109,7 @@ namespace TicketSystem.Infrastructure.Services
                         seat.Status = SeatStatus.Reserved;
                         seat.PassengerName = passenger.Name;
                         seat.PassengerDocument = passenger.Document;
-                        seat.UpdatedAt = DateTime.UtcNow;
+                        seat.UpdatedAt = DateTime.Now;
                         await _seatRepository.UpdateAsync(seat);
 
                         var reservationSeat = new ReservationSeat
@@ -118,7 +118,7 @@ namespace TicketSystem.Infrastructure.Services
                             SeatId = seat.Id,
                             Price = trip.Price * (seat.PriceMultiplier ?? 1.0m),
                             IsActive = true,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = DateTime.Now
                         };
 
                         await _reservationSeatRepository.AddAsync(reservationSeat);
@@ -174,7 +174,7 @@ namespace TicketSystem.Infrastructure.Services
                     if (reservation.Status != ReservationStatus.Pending)
                         throw new InvalidOperationException($"Reserva está com status {reservation.Status} e não pode ser confirmada");
 
-                    if (reservation.ExpiresAt < DateTime.UtcNow)
+                    if (reservation.ExpiresAt < DateTime.Now)
                         throw new InvalidOperationException("Reserva expirou. Por favor, faça uma nova reserva.");
 
                     if (reservation.Trip.Status == TripStatus.Completed || reservation.Trip.Status == TripStatus.Cancelled)
@@ -189,12 +189,12 @@ namespace TicketSystem.Infrastructure.Services
                         }
 
                         seat.Status = SeatStatus.Sold;
-                        seat.UpdatedAt = DateTime.UtcNow;
+                        seat.UpdatedAt = DateTime.Now;
                         await _seatRepository.UpdateAsync(seat);
                     }
 
                     reservation.Status = ReservationStatus.Confirmed;
-                    reservation.UpdatedAt = DateTime.UtcNow;
+                    reservation.UpdatedAt = DateTime.Now;
                     await _repository.UpdateAsync(reservation);
 
                     await transaction.CommitAsync();
@@ -244,14 +244,14 @@ namespace TicketSystem.Infrastructure.Services
                             seat.Status = SeatStatus.Available;
                             seat.PassengerName = null;
                             seat.PassengerDocument = null;
-                            seat.UpdatedAt = DateTime.UtcNow;
+                            seat.UpdatedAt = DateTime.Now;
                             await _seatRepository.UpdateAsync(seat);
                         }
                     }
 
                     reservation.Status = ReservationStatus.Cancelled;
                     reservation.IsActive = false;
-                    reservation.UpdatedAt = DateTime.UtcNow;
+                    reservation.UpdatedAt = DateTime.Now;
                     await _repository.UpdateAsync(reservation);
 
                     await transaction.CommitAsync();
@@ -333,7 +333,7 @@ namespace TicketSystem.Infrastructure.Services
 
         public async Task ExpirePendingReservationsAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
 
             var expiredReservations = await _context.Reservations
             .Include(r => r.ReservationSeats)
@@ -353,7 +353,7 @@ namespace TicketSystem.Infrastructure.Services
                         seat.Status = SeatStatus.Available;
                         seat.PassengerName = null;
                         seat.PassengerDocument = null;
-                        seat.UpdatedAt = DateTime.UtcNow;
+                        seat.UpdatedAt = DateTime.Now;
                     }
                 }
 

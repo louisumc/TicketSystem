@@ -31,7 +31,7 @@ foreach (var entry in entries)
 {
 if (entry.State == EntityState.Modified)
 {
-entry.Entity.UpdatedAt = DateTime.UtcNow;
+entry.Entity.UpdatedAt = DateTime.Now;
 }
 }
 

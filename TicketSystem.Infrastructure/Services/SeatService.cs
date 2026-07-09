@@ -161,7 +161,7 @@ namespace TicketSystem.Infrastructure.Services
                         Column = col,
                         PriceMultiplier = priceMultiplier,
                         IsActive = true,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     });
                 }
             }

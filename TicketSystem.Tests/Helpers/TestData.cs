@@ -15,7 +15,7 @@ namespace TicketSystem.Tests.Helpers
                 Company = "Viação Expresso",
                 Capacity = 45,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
         }
 
@@ -27,14 +27,14 @@ namespace TicketSystem.Tests.Helpers
                 Id = Guid.NewGuid(),
                 Origin = "Sao Paulo",
                 Destination = "Rio de Janeiro",
-                DepartureTime = DateTime.UtcNow.AddHours(8),
-                ArrivalTime = DateTime.UtcNow.AddHours(11),
+                DepartureTime = DateTime.Now.AddHours(8),
+                ArrivalTime = DateTime.Now.AddHours(11),
                 BusId = bus.Id,
                 Bus = bus,
                 Price = 120.00m,
                 Status = TripStatus.Scheduled,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
         }
 
@@ -51,7 +51,7 @@ namespace TicketSystem.Tests.Helpers
                 Column = 1,
                 PriceMultiplier = 1.10m,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
         }
 
@@ -65,7 +65,7 @@ namespace TicketSystem.Tests.Helpers
                 Email = "joao@email.com",
                 Phone = "11999999999",
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
         }
 
@@ -76,12 +76,12 @@ namespace TicketSystem.Tests.Helpers
                 Id = Guid.NewGuid(),
                 TripId = tripId ?? Guid.NewGuid(),
                 PassengerId = passengerId ?? Guid.NewGuid(),
-                ReservationDate = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+                ReservationDate = DateTime.Now,
+                ExpiresAt = DateTime.Now.AddMinutes(15),
                 Status = ReservationStatus.Pending,
                 TotalAmount = 120.00m,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
         }
 
@@ -103,7 +103,7 @@ namespace TicketSystem.Tests.Helpers
                     Company = company,
                     Capacity = capacity,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 });
             }
             return buses;
@@ -124,14 +124,14 @@ namespace TicketSystem.Tests.Helpers
                     Id = Guid.NewGuid(),
                     Origin = origin,
                     Destination = destination,
-                    DepartureTime = DateTime.UtcNow.AddHours(i * 4),
-                    ArrivalTime = DateTime.UtcNow.AddHours((i * 4) + 3),
+                    DepartureTime = DateTime.Now.AddHours(i * 4),
+                    ArrivalTime = DateTime.Now.AddHours((i * 4) + 3),
                     BusId = bus.Id,
                     Bus = bus,
                     Price = price,
                     Status = TripStatus.Scheduled,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 });
             }
             return trips;
@@ -173,7 +173,7 @@ namespace TicketSystem.Tests.Helpers
                     Column = col,
                     PriceMultiplier = priceMultiplier,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 });
             }
             return seats;

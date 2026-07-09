@@ -10,7 +10,7 @@
 
         public ApiResponse()
         {
-            Timestamp = DateTime.UtcNow;
+            Timestamp = DateTime.Now;
             Success = true;
         }
 
@@ -24,7 +24,7 @@
         {
             Success = success;
             Message = message;
-            Timestamp = DateTime.UtcNow;
+            Timestamp = DateTime.Now;
             Errors = new List<string>();
         }
 
@@ -33,7 +33,7 @@
             Success = false;
             Message = message;
             Errors = errors;
-            Timestamp = DateTime.UtcNow;
+            Timestamp = DateTime.Now;
         }
 
         public void AddError(string error)

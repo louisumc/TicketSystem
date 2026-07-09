@@ -33,7 +33,7 @@ namespace TicketSystem.Tests.Domain
            
             trip.Id.Should().NotBeEmpty();
             trip.IsActive.Should().BeTrue();
-            trip.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
+            trip.CreatedAt.Should().BeCloseTo(DateTime.Now, TimeSpan.FromSeconds(1));
             trip.Status.Should().Be(TripStatus.Scheduled);
             trip.UpdatedAt.Should().BeNull();
         }
@@ -70,7 +70,7 @@ namespace TicketSystem.Tests.Domain
 
             
             trip.DepartureTime.Should().BeBefore(trip.ArrivalTime);
-            trip.DepartureTime.Should().BeAfter(DateTime.UtcNow);
+            trip.DepartureTime.Should().BeAfter(DateTime.Now);
         }
     }
 }

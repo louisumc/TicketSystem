@@ -149,8 +149,8 @@ namespace TicketSystem.Tests.Infrastructure.Services
             {
                 Origin = "São Paulo",
                 Destination = "Curitiba",
-                DepartureTime = DateTime.UtcNow.AddHours(10),
-                ArrivalTime = DateTime.UtcNow.AddHours(14),
+                DepartureTime = DateTime.Now.AddHours(10),
+                ArrivalTime = DateTime.Now.AddHours(14),
                 BusId = busId,
                 Price = 200.00m,
                 Status = TripStatus.Scheduled
@@ -180,8 +180,8 @@ namespace TicketSystem.Tests.Infrastructure.Services
             {
                 Origin = "São Paulo",
                 Destination = "Curitiba",
-                DepartureTime = DateTime.UtcNow.AddHours(10),
-                ArrivalTime = DateTime.UtcNow.AddHours(14),
+                DepartureTime = DateTime.Now.AddHours(10),
+                ArrivalTime = DateTime.Now.AddHours(14),
                 BusId = Guid.NewGuid(),
                 Price = 200.00m
             };
@@ -207,8 +207,8 @@ namespace TicketSystem.Tests.Infrastructure.Services
             {
                 Origin = "São Paulo",
                 Destination = "Curitiba",
-                DepartureTime = DateTime.UtcNow.AddHours(10),
-                ArrivalTime = DateTime.UtcNow.AddHours(14),
+                DepartureTime = DateTime.Now.AddHours(10),
+                ArrivalTime = DateTime.Now.AddHours(14),
                 BusId = busId,
                 Price = 200.00m,
                 Status = TripStatus.Scheduled
@@ -225,7 +225,7 @@ namespace TicketSystem.Tests.Infrastructure.Services
                 Price = createDto.Price,
                 Status = createDto.Status,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             var seats = new List<SeatDto>

@@ -29,7 +29,7 @@ namespace TicketSystem.Infrastructure.Configurations
 
             builder.Property(b => b.CreatedAt)
                 .IsRequired()
-                .HasDefaultValueSql("GETUTCDATE()");
+                .HasDefaultValueSql("GETDATE()");
 
             builder.Property(b => b.IsActive)
                 .IsRequired()

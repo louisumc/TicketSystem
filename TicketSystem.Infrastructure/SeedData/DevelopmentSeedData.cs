@@ -6,7 +6,7 @@ namespace TicketSystem.Infrastructure.SeedData
 {
     public static class DevelopmentSeedData
     {
-        private static readonly DateTime Now = DateTime.UtcNow;
+        private static readonly DateTime Now = DateTime.Now;
 
         public static void Up(MigrationBuilder migrationBuilder)
         {

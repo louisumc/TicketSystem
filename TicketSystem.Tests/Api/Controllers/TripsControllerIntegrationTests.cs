@@ -105,7 +105,7 @@ d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
             _dbContext.Buses.RemoveRange(_dbContext.Buses);
             _dbContext.SaveChanges();
 
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
 
             var bus = new Bus
             {
@@ -244,8 +244,8 @@ CreatedAt = now
             {
                 Origin = "São Paulo",
                 Destination = "Belo Horizonte",
-                DepartureTime = DateTime.UtcNow.AddHours(72),
-                ArrivalTime = DateTime.UtcNow.AddHours(77),
+                DepartureTime = DateTime.Now.AddHours(72),
+                ArrivalTime = DateTime.Now.AddHours(77),
                 BusId = busId,
                 Price = 150.00m,
                 Status = TripStatus.Scheduled
@@ -278,8 +278,8 @@ CreatedAt = now
             {
                 Origin = "São Paulo",
                 Destination = "Belo Horizonte",
-                DepartureTime = DateTime.UtcNow.AddHours(72),
-                ArrivalTime = DateTime.UtcNow.AddHours(77),
+                DepartureTime = DateTime.Now.AddHours(72),
+                ArrivalTime = DateTime.Now.AddHours(77),
                 BusId = Guid.NewGuid(),
                 Price = 150.00m,
                 Status = TripStatus.Scheduled
@@ -303,8 +303,8 @@ CreatedAt = now
             {
                 Origin = "São Paulo",
                 Destination = "Belo Horizonte",
-                DepartureTime = DateTime.UtcNow.AddHours(-1),
-                ArrivalTime = DateTime.UtcNow.AddHours(4),
+                DepartureTime = DateTime.Now.AddHours(-1),
+                ArrivalTime = DateTime.Now.AddHours(4),
                 BusId = busId,
                 Price = 150.00m,
                 Status = TripStatus.Scheduled
@@ -330,8 +330,8 @@ CreatedAt = now
                 Id = id,
                 Origin = "São Paulo Updated",
                 Destination = "Rio de Janeiro Updated",
-                DepartureTime = DateTime.UtcNow.AddHours(30),
-                ArrivalTime = DateTime.UtcNow.AddHours(33),
+                DepartureTime = DateTime.Now.AddHours(30),
+                ArrivalTime = DateTime.Now.AddHours(33),
                 BusId = busId,
                 Price = 180.00m,
                 Status = TripStatus.Scheduled,
@@ -366,8 +366,8 @@ CreatedAt = now
                 Id = Guid.NewGuid(),
                 Origin = "Test",
                 Destination = "Test",
-                DepartureTime = DateTime.UtcNow.AddHours(30),
-                ArrivalTime = DateTime.UtcNow.AddHours(33),
+                DepartureTime = DateTime.Now.AddHours(30),
+                ArrivalTime = DateTime.Now.AddHours(33),
                 BusId = busId,
                 Price = 100.00m,
                 Status = TripStatus.Scheduled,
