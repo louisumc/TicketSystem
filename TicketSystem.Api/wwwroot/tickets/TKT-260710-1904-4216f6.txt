@@ -1,0 +1,18 @@
+
+=== BILHETE DE VIAGEM ===
+
+Ticket: TKT-260710-1904-4216f6
+Passageiro: Usuario_104767f74f6
+Documento: 70551441832
+
+Viagem: Sao Paulo -> Rio de Janeiro
+Data: 10/07/2026 17:26:43
+
+Assentos:
+ - 2A (Window) - R$ 132,00
+
+Total: R$ 132,00
+
+==========================
+Este bilhete e eletronico.
+Apresente no embarque.

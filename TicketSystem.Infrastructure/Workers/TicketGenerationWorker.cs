@@ -21,10 +21,10 @@ namespace TicketSystem.Infrastructure.Workers
         private readonly JsonSerializerOptions _jsonOptions;
 
         public TicketGenerationWorker(
-        IConfiguration configuration,
-        ILogger<TicketGenerationWorker> logger,
-        IServiceProvider serviceProvider,
-        IConnection connection)
+            IConfiguration configuration,
+            ILogger<TicketGenerationWorker> logger,
+            IServiceProvider serviceProvider,
+            IConnection connection)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
@@ -45,11 +45,14 @@ namespace TicketSystem.Infrastructure.Workers
             _connection = connection;
             _channel = _connection.CreateModel();
 
+            // Configurar QoS para processar apenas 1 mensagem por vez (evitar sobrecarga)
+            _channel.BasicQos(0, 1, false);
+
             var args = new Dictionary<string, object>
-{
-{ "x-dead-letter-exchange", "ticket.events.dlx" },
-{ "x-dead-letter-routing-key", "reservation.confirmed.dlq" }
-};
+            {
+                { "x-dead-letter-exchange", "ticket.events.dlx" },
+                { "x-dead-letter-routing-key", "reservation.confirmed.dlq" }
+            };
             _channel.QueueDeclare("reservation.confirmed", durable: true, exclusive: false, autoDelete: false, arguments: args);
 
             _logger.LogInformation("TicketGenerationWorker inicializado. Escutando fila: reservation.confirmed");
@@ -85,11 +88,14 @@ namespace TicketSystem.Infrastructure.Workers
 
                     await GenerateTicketAsync(eventObj, stoppingToken);
 
+                    // ACK apenas após processamento bem-sucedido
                     _channel.BasicAck(ea.DeliveryTag, false);
+                    _logger.LogInformation("Bilhete processado com sucesso para reserva: {ReservationId}", eventObj.ReservationId);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Erro ao processar geracao de bilhete");
+                    // Rejeita e reenvia (requeue = true)
                     _channel.BasicNack(ea.DeliveryTag, false, true);
                 }
             };
@@ -104,7 +110,8 @@ namespace TicketSystem.Infrastructure.Workers
         {
             _logger.LogInformation("Gerando bilhete para reserva: {ReservationId}", eventObj.ReservationId);
 
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            // Pequeno delay para garantir que a transação foi commitada
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
 
             var ticketCode = GenerateTicketCode(eventObj);
             var ticketUrl = "/tickets/" + ticketCode + ".txt";
@@ -120,25 +127,50 @@ namespace TicketSystem.Infrastructure.Workers
 
             var storagePath = Path.Combine(ticketsPath, ticketCode + ".txt");
 
-            var content = "=== BILHETE DE VIAGEM ===\n\n";
-            content += "Ticket: " + ticketCode + "\n";
-            content += "Passageiro: " + eventObj.PassengerName + "\n";
-            content += "Documento: " + eventObj.PassengerDocument + "\n\n";
-            content += "Viagem: " + eventObj.TripOrigin + " -> " + eventObj.TripDestination + "\n";
-            content += "Data: " + eventObj.TripDepartureTime + "\n\n";
-            content += "Assentos:\n";
-            foreach (var seat in eventObj.Seats)
+            var content = GenerateTicketContent(eventObj, ticketCode);
+
+            // Escreve o arquivo com retry
+            var maxRetries = 3;
+            var retryDelay = TimeSpan.FromMilliseconds(500);
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                content += " - " + seat.Number + " (" + seat.Type + ") - R " + seat.Price.ToString("F2") + "\n";
+                try
+                {
+                    await File.WriteAllTextAsync(storagePath, content, cancellationToken);
+
+                    // Verifica se o arquivo foi realmente criado
+                    if (File.Exists(storagePath))
+                    {
+                        var fileInfo = new FileInfo(storagePath);
+                        _logger.LogInformation("Bilhete TXT criado: {StoragePath} - Tamanho: {Size} bytes - Tentativa: {Attempt}",
+                            storagePath, fileInfo.Length, attempt);
+                        break;
+                    }
+
+                    if (attempt == maxRetries)
+                    {
+                        throw new IOException($"Arquivo não foi criado após {maxRetries} tentativas: {storagePath}");
+                    }
+
+                    _logger.LogWarning("Arquivo não encontrado após escrita, tentando novamente... Tentativa {Attempt}/{MaxRetries}",
+                        attempt, maxRetries);
+                    await Task.Delay(retryDelay * attempt, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Erro ao escrever arquivo {StoragePath} - Tentativa {Attempt}/{MaxRetries}",
+                        storagePath, attempt, maxRetries);
+
+                    if (attempt == maxRetries)
+                    {
+                        throw;
+                    }
+
+                    await Task.Delay(retryDelay * attempt, cancellationToken);
+                }
             }
-            content += "\nTotal: R " + eventObj.TotalAmount.ToString("F2") + "\n\n";
-            content += "==========================\n";
-            content += "Este bilhete e eletronico.\n";
-            content += "Apresente no embarque.\n";
 
-            await File.WriteAllTextAsync(storagePath, content, cancellationToken);
-
-            _logger.LogInformation("Bilhete TXT criado: {StoragePath}", storagePath);
             _logger.LogInformation("Bilhete gerado: {TicketCode} - {TicketUrl}", ticketCode, ticketUrl);
 
             using var scope = _serviceProvider.CreateScope();
@@ -168,7 +200,8 @@ namespace TicketSystem.Infrastructure.Workers
                 QrCode = qrCode
             };
 
-            await eventPublisher.PublishAsync(ticketEvent, cancellationToken);
+            // Publicar com retry
+            await eventPublisher.PublishWithRetryAsync(ticketEvent, 3, cancellationToken);
 
             _logger.LogInformation("TicketGeneratedEvent publicado para reserva: {ReservationId}", eventObj.ReservationId);
         }
@@ -186,6 +219,29 @@ namespace TicketSystem.Infrastructure.Workers
         private string GenerateQrCode(string ticketCode)
         {
             return "QR-" + ticketCode + "-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        }
+
+        private string GenerateTicketContent(ReservationConfirmedEvent eventObj, string ticketCode)
+        {
+            return @"
+=== BILHETE DE VIAGEM ===
+
+Ticket: " + ticketCode + @"
+Passageiro: " + eventObj.PassengerName + @"
+Documento: " + eventObj.PassengerDocument + @"
+
+Viagem: " + eventObj.TripOrigin + " -> " + eventObj.TripDestination + @"
+Data: " + eventObj.TripDepartureTime + @"
+
+Assentos:
+" + string.Join("\n", eventObj.Seats.Select(s => " - " + s.Number + " (" + s.Type + ") - R$ " + s.Price.ToString("F2"))) + @"
+
+Total: R$ " + eventObj.TotalAmount.ToString("F2") + @"
+
+==========================
+Este bilhete e eletronico.
+Apresente no embarque.
+";
         }
 
         public override void Dispose()

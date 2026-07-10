@@ -66,32 +66,59 @@ class Program
             return;
         }
 
-        var validTrips = trips.Where(t => t.AvailableSeats >= 4).ToList();
+        var validTrips = trips.Where(t => t.AvailableSeats >= 8).ToList();
         if (validTrips.Count == 0)
         {
-            Console.WriteLine("ERRO: Nenhuma viagem com pelo menos 4 assentos disponiveis!");
-            Console.WriteLine();
-            Console.WriteLine("Pressione qualquer tecla para sair...");
-            Console.ReadKey();
-            return;
+            Console.WriteLine("ERRO: Nenhuma viagem com pelo menos 8 assentos disponiveis!");
+            Console.WriteLine("Buscando viagens com pelo menos 5 assentos disponiveis...");
+
+            validTrips = trips.Where(t => t.AvailableSeats >= 5).ToList();
+            if (validTrips.Count == 0)
+            {
+                Console.WriteLine("ERRO: Nenhuma viagem com assentos suficientes!");
+                Console.WriteLine();
+                Console.WriteLine("Pressione qualquer tecla para sair...");
+                Console.ReadKey();
+                return;
+            }
         }
 
         var randomIndex = _random.Next(0, validTrips.Count);
         var trip = validTrips[randomIndex];
-        var availableSeats = trip.SeatNumbers.Take(4).ToList();
 
-        if (availableSeats.Count < 4)
+        var seatForTest1 = trip.SeatNumbers.FirstOrDefault();
+
+        var seatsForTest2 = trip.SeatNumbers
+            .Where(s => s != seatForTest1)
+            .Take(4)
+            .ToList();
+
+        var usedSeats = new List<string> { seatForTest1 };
+        usedSeats.AddRange(seatsForTest2);
+
+        var seatForTest3 = trip.SeatNumbers
+            .Where(s => !usedSeats.Contains(s))
+            .FirstOrDefault();
+
+        if (string.IsNullOrEmpty(seatForTest1))
         {
-            Console.WriteLine("ERRO: Poucos assentos disponiveis!");
+            Console.WriteLine("ERRO: Nenhum assento disponivel para o Teste 1!");
             Console.ReadKey();
             return;
+        }
+
+        if (seatsForTest2.Count < 4)
+        {
+            Console.WriteLine("AVISO: Poucos assentos disponiveis para o Teste 2. Usando " + seatsForTest2.Count + " assentos.");
         }
 
         Console.WriteLine("Viagem encontrada (aleatoria): " + trip.Id);
         Console.WriteLine(" Origem: " + trip.Origin);
         Console.WriteLine(" Destino: " + trip.Destination);
         Console.WriteLine(" Assentos disponiveis: " + trip.AvailableSeats);
-        Console.WriteLine(" Assentos para teste: " + string.Join(", ", availableSeats));
+        Console.WriteLine(" Assento para Teste 1: " + seatForTest1);
+        Console.WriteLine(" Assentos para Teste 2: " + string.Join(", ", seatsForTest2));
+        Console.WriteLine(" Assento para Teste 3: " + (seatForTest3 ?? "Nenhum disponivel"));
 
         Console.WriteLine();
         Console.WriteLine("PAUSA: Verifique as filas no RabbitMQ antes de comecar:");
@@ -105,11 +132,11 @@ class Program
         Console.WriteLine();
         Console.WriteLine("========================================");
         Console.WriteLine(" TESTE 1: MESMO ASSENTO");
-        Console.WriteLine(" 10 usuarios tentando reservar o assento " + availableSeats[0]);
+        Console.WriteLine(" 10 usuarios tentando reservar o assento " + seatForTest1);
         Console.WriteLine("========================================");
         Console.WriteLine();
 
-        await TestSameSeat(trip.Id, availableSeats[0]);
+        await TestSameSeat(trip.Id, seatForTest1);
 
         Console.WriteLine();
         Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 1:");
@@ -120,41 +147,10 @@ class Program
         Console.ReadLine();
 
         Console.WriteLine();
-        Console.WriteLine("Atualizando lista de assentos disponiveis apos Teste 1...");
-        var tripsAfterTest1 = await GetTripsWithAvailableSeats();
-        var tripAfterTest1 = tripsAfterTest1.FirstOrDefault(t => t.Id == trip.Id);
-
-        if (tripAfterTest1 == null || tripAfterTest1.AvailableSeats < 3)
-        {
-            Console.WriteLine("AVISO: Poucos assentos disponiveis na viagem atual. Buscando outra viagem...");
-            var otherTrip = tripsAfterTest1.FirstOrDefault(t => t.AvailableSeats >= 3);
-            if (otherTrip != null)
-            {
-                trip = otherTrip;
-                Console.WriteLine("Nova viagem encontrada: " + trip.Id);
-                Console.WriteLine(" Origem: " + trip.Origin);
-                Console.WriteLine(" Destino: " + trip.Destination);
-                Console.WriteLine(" Assentos disponiveis: " + trip.AvailableSeats);
-            }
-            else
-            {
-                Console.WriteLine("ERRO: Nenhuma viagem com assentos disponiveis para continuar!");
-                Console.WriteLine("Pressione qualquer tecla para sair...");
-                Console.ReadKey();
-                return;
-            }
-        }
-        else
-        {
-            trip = tripAfterTest1;
-        }
-
-        var seatsForTest2 = trip.SeatNumbers.Take(4).ToList();
-
-        Console.WriteLine();
         Console.WriteLine("========================================");
         Console.WriteLine(" TESTE 2: ASSENTOS DIFERENTES");
-        Console.WriteLine(" 4 usuarios diferentes reservando 4 assentos diferentes");
+        Console.WriteLine(" " + seatsForTest2.Count + " usuarios diferentes reservando assentos diferentes");
+        Console.WriteLine(" Assentos: " + string.Join(", ", seatsForTest2));
         Console.WriteLine("========================================");
         Console.WriteLine();
 
@@ -162,57 +158,34 @@ class Program
 
         Console.WriteLine();
         Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 2:");
-        Console.WriteLine(" Fila: reservation.created - deve ter +4 mensagens");
+        Console.WriteLine(" Fila: reservation.created - deve ter +" + seatsForTest2.Count + " mensagens");
         Console.WriteLine(" Fila: reservation.confirmed - deve estar vazia");
         Console.WriteLine();
         Console.WriteLine("Pressione ENTER para continuar...");
         Console.ReadLine();
 
         Console.WriteLine();
-        Console.WriteLine("Atualizando lista de assentos disponiveis apos Teste 2...");
-        var tripsAfterTest2 = await GetTripsWithAvailableSeats();
-        var tripAfterTest2 = tripsAfterTest2.FirstOrDefault(t => t.Id == trip.Id);
+        Console.WriteLine("========================================");
+        Console.WriteLine(" TESTE 3: PAGAMENTO CONCORRENTE COM RESERVAS EXPIRADAS");
+        Console.WriteLine("========================================");
+        Console.WriteLine();
 
-        if (tripAfterTest2 == null || tripAfterTest2.AvailableSeats == 0)
+        if (!string.IsNullOrEmpty(seatForTest3))
         {
-            Console.WriteLine("AVISO: Nenhum assento disponivel na viagem atual para o Teste 3!");
-            Console.WriteLine("Buscando outra viagem com assentos disponiveis...");
+            Console.WriteLine();
+            Console.WriteLine("========================================");
+            Console.WriteLine(" TESTE 3: PAGAMENTO CONCORRENTE COM RESERVAS EXPIRADAS");
+            Console.WriteLine(" 5 usuarios com reservas para o mesmo assento, mas apenas 1 esta valida");
+            Console.WriteLine(" Assento: " + seatForTest3);
+            Console.WriteLine("========================================");
+            Console.WriteLine();
 
-            var otherTrip = tripsAfterTest2.FirstOrDefault(t => t.AvailableSeats > 0);
-            if (otherTrip != null)
-            {
-                trip = otherTrip;
-                Console.WriteLine("Nova viagem encontrada: " + trip.Id);
-                Console.WriteLine(" Origem: " + trip.Origin);
-                Console.WriteLine(" Destino: " + trip.Destination);
-                Console.WriteLine(" Assentos disponiveis: " + trip.AvailableSeats);
-            }
-            else
-            {
-                Console.WriteLine("AVISO: Nenhuma viagem com assentos disponiveis.");
-                Console.WriteLine("Pulando Teste 3 e indo para a etapa de pagamento...");
-            }
+            await TestConcurrentPaymentsWithExpiredReservations(trip.Id, seatForTest3);
         }
         else
         {
-            trip = tripAfterTest2;
-        }
-
-        if (trip != null && trip.AvailableSeats > 0)
-        {
-            var seatForTest3 = trip.SeatNumbers.FirstOrDefault();
-            if (!string.IsNullOrEmpty(seatForTest3))
-            {
-                Console.WriteLine();
-                Console.WriteLine("========================================");
-                Console.WriteLine(" TESTE 3: CONFIRMACAO CONCORRENTE");
-                Console.WriteLine(" 5 usuarios tentando confirmar a mesma reserva");
-                Console.WriteLine(" Assento disponivel: " + seatForTest3);
-                Console.WriteLine("========================================");
-                Console.WriteLine();
-
-                await TestConcurrentConfirmations(trip.Id, new List<string> { seatForTest3 });
-            }
+            Console.WriteLine("AVISO: Nenhum assento disponivel para o Teste 3.");
+            Console.WriteLine("Pulando Teste 3...");
         }
 
         Console.WriteLine();
@@ -264,9 +237,8 @@ class Program
                     {
                         Console.WriteLine("Reservas pendentes encontradas: " + pendingReservations.Count);
 
-                        for (int i = 0; i < pendingReservations.Count && i < 3; i++)
+                        foreach (var reservation in pendingReservations)
                         {
-                            var reservation = pendingReservations[i];
                             Console.WriteLine();
                             Console.WriteLine("Processando pagamento para reserva: " + reservation.Id);
                             Console.WriteLine(" Passageiro: " + reservation.PassengerName);
@@ -274,14 +246,15 @@ class Program
 
                             var payRequest = new { paymentMethod = "Cartao de Credito" };
                             var payContent = new StringContent(
-                            JsonSerializer.Serialize(payRequest, _jsonOptions),
-                            Encoding.UTF8,
-                            "application/json");
+                                JsonSerializer.Serialize(payRequest, _jsonOptions),
+                                Encoding.UTF8,
+                                "application/json");
 
                             var payResponse = await _httpClient.PostAsync("/api/payment/reservations/" + reservation.Id + "/pay", payContent);
 
                             if (payResponse.IsSuccessStatusCode)
                             {
+                                var responseContent = await payResponse.Content.ReadAsStringAsync();
                                 Console.WriteLine(" Pagamento aprovado!");
                                 Console.WriteLine(" Email enviado para: " + reservation.PassengerEmail);
                                 Console.WriteLine(" Bilhete gerado com sucesso");
@@ -292,7 +265,7 @@ class Program
                                 Console.WriteLine(" Pagamento recusado: " + error);
                             }
 
-                            await Task.Delay(1000);
+                            await Task.Delay(500);
                         }
                     }
                 }
@@ -318,6 +291,214 @@ class Program
         Console.WriteLine();
         Console.WriteLine("Pressione qualquer tecla para sair...");
         Console.ReadKey();
+    }
+
+    // ============================================
+    // TESTE 3: PAGAMENTO CONCORRENTE COM RESERVAS EXPIRADAS
+    // ============================================
+    static async Task TestConcurrentPaymentsWithExpiredReservations(string tripId, string seatNumber)
+    {
+        Console.WriteLine("TripId: " + tripId);
+        Console.WriteLine("Assento: " + seatNumber);
+        Console.WriteLine();
+        Console.WriteLine("Criando 5 reservas para o mesmo assento, com tempos de expiracao diferentes...");
+        Console.WriteLine(" Apenas 1 reserva ficara valida (a ultima criada)");
+        Console.WriteLine(" As outras 4 serao criadas com expiracao de 3 segundos (irao expirar)");
+        Console.WriteLine();
+
+        var reservations = new List<(Guid Id, string PassengerName, string PassengerEmail)>();
+
+        // Criar 4 reservas que vão expirar rapidamente (3 segundos) usando o endpoint de teste
+        for (int i = 1; i <= 4; i++)
+        {
+            var passenger = GenerateUniquePassenger(2000 + i);
+
+            Console.WriteLine($"Criando reserva {i} (EXPIRA EM 3 SEGUNDOS)...");
+
+            var reservationId = await CreateTestReservation(tripId, seatNumber, passenger.Name, passenger.Document, 3);
+
+            if (!string.IsNullOrEmpty(reservationId))
+            {
+                reservations.Add((Guid.Parse(reservationId), passenger.Name, passenger.Email));
+                Console.WriteLine($" Reserva {i} criada: {reservationId}");
+            }
+            else
+            {
+                Console.WriteLine($" Reserva {i} falhou ao criar (assento pode estar ocupado)");
+            }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Aguardando 6 segundos para as reservas expirarem e os assentos serem liberados...");
+        Console.WriteLine("(O ReservationExpirationWorker deve processar neste intervalo)");
+        await Task.Delay(TimeSpan.FromSeconds(6));
+
+        // Verificar se o assento foi liberado
+        Console.WriteLine();
+        Console.WriteLine($"Verificando se o assento {seatNumber} foi liberado...");
+
+        try
+        {
+            var seatsResponse = await _httpClient.GetAsync($"/api/seats/trip/{tripId}");
+            if (seatsResponse.IsSuccessStatusCode)
+            {
+                var seatsResult = await seatsResponse.Content.ReadFromJsonAsync<ApiResponse<List<SeatResponse>>>();
+                var seat = seatsResult?.Data?.FirstOrDefault(s => s.Number == seatNumber);
+
+                if (seat != null)
+                {
+                    Console.WriteLine($" Status do assento {seatNumber}: {(seat.Status == 0 ? "Disponivel" : "Ocupado (Status: " + seat.Status + ")")}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao verificar assento: {ex.Message}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Criando reserva 5 (VALIDA - expira em 15 minutos)...");
+        var validPassenger = GenerateUniquePassenger(2005);
+        var validReservationId = await CreateReservation(tripId, seatNumber, validPassenger.Name, validPassenger.Document);
+
+        if (!string.IsNullOrEmpty(validReservationId))
+        {
+            reservations.Add((Guid.Parse(validReservationId), validPassenger.Name, validPassenger.Email));
+            Console.WriteLine($" Reserva 5 criada (valida): {validReservationId}");
+        }
+        else
+        {
+            Console.WriteLine("ERRO: Nao foi possivel criar a reserva valida. O assento ainda esta ocupado.");
+            Console.WriteLine("Teste 3 nao pode ser concluido.");
+            return;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("========================================");
+        Console.WriteLine(" 5 usuarios tentando pagar pela reserva do mesmo assento");
+        Console.WriteLine(" Apenas a reserva 5 esta valida (nao expirada)");
+        Console.WriteLine(" As reservas 1 a 4 ja expiraram");
+        Console.WriteLine("========================================");
+        Console.WriteLine();
+
+        var tasks = new List<Task<(int Index, string ReservationId, string PassengerName, bool Success, string Message)>>();
+
+        foreach (var reservation in reservations)
+        {
+            var index = reservations.IndexOf(reservation) + 1;
+            var reservationId = reservation.Id;
+            var passengerName = reservation.PassengerName;
+
+            tasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    var payRequest = new { paymentMethod = "Cartao de Credito" };
+                    var payContent = new StringContent(
+                        JsonSerializer.Serialize(payRequest, _jsonOptions),
+                        Encoding.UTF8,
+                        "application/json");
+
+                    Console.WriteLine($" Tentando pagamento para reserva {index} (Id: {reservationId})...");
+
+                    var response = await _httpClient.PostAsync("/api/payment/reservations/" + reservationId + "/pay", payContent);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return (index, reservationId.ToString(), passengerName, true, "Pagamento aprovado!");
+                    }
+                    else
+                    {
+                        var responseBody = await response.Content.ReadAsStringAsync();
+                        return (index, reservationId.ToString(), passengerName, false, "Falha no pagamento: " + response.StatusCode);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return (index, reservationId.ToString(), passengerName, false, "Erro: " + ex.Message);
+                }
+            }));
+        }
+
+        var results = await Task.WhenAll(tasks);
+
+        Console.WriteLine();
+        Console.WriteLine("=== RESULTADOS DO TESTE 3 ===");
+        Console.WriteLine();
+
+        foreach (var result in results.OrderBy(r => r.Index))
+        {
+            if (result.Success)
+            {
+                Console.WriteLine($" Reserva {result.Index} ({result.PassengerName}): SUCESSO - {result.Message}");
+            }
+            else
+            {
+                Console.WriteLine($" Reserva {result.Index} ({result.PassengerName}): FALHA - {result.Message}");
+            }
+        }
+
+        var successCount = results.Count(r => r.Success);
+        Console.WriteLine();
+        Console.WriteLine("Resultado final: " + successCount + " sucesso(s), " + (results.Length - successCount) + " falha(s)");
+        Console.WriteLine("Esperado: 1 sucesso (apenas a reserva 5, que nao expirou)");
+        Console.WriteLine();
+        Console.WriteLine("O email e o bilhete devem ser gerados APENAS para a reserva 5 (valida)");
+    }
+
+    // ============================================
+    // CRIAR RESERVA COM EXPIRACAO PERSONALIZADA (USA ENDPOINT DE TESTE)
+    // ============================================
+    static async Task<string> CreateTestReservation(string tripId, string seatNumber, string name, string document, int expirationSeconds)
+    {
+        try
+        {
+            var request = new
+            {
+                TripId = tripId,
+                Passenger = new
+                {
+                    Name = name,
+                    Document = document,
+                    Email = name.ToLower().Replace(" ", "") + "@email.com",
+                    Phone = "11999999999"
+                },
+                SeatNumbers = new[] { seatNumber }
+            };
+
+            var content = new StringContent(
+                JsonSerializer.Serialize(request, _jsonOptions),
+                Encoding.UTF8,
+                "application/json");
+
+            // Usar o endpoint de teste com expiracao personalizada
+            var response = await _httpClient.PostAsync($"/api/reservations/test?expirationSeconds={expirationSeconds}", content);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine("Erro ao criar reserva de teste: " + responseBody);
+                return null;
+            }
+
+            var result = JsonSerializer.Deserialize<ApiResponse<ReservationResponse>>(responseBody, _jsonOptions);
+            if (result != null && result.Data != null)
+            {
+                return result.Data.Id.ToString();
+            }
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Excecao ao criar reserva de teste: " + ex.Message);
+            return null;
+        }
+    }
+
+    static async Task<string> CreateReservationWithCustomExpiration(string tripId, string seatNumber, string name, string document, TimeSpan expirationTime)
+    {
+        // Este metodo agora usa o endpoint de teste
+        return await CreateTestReservation(tripId, seatNumber, name, document, (int)expirationTime.TotalSeconds);
     }
 
     static async Task<bool> WaitForApiReady(string baseUrl)
@@ -437,9 +618,9 @@ class Program
                     if (seatsResult != null && seatsResult.Data != null)
                     {
                         var availableSeats = seatsResult.Data
-                        .Where(s => s.Status == 0)
-                        .Select(s => s.Number)
-                        .ToList();
+                            .Where(s => s.Status == 0)
+                            .Select(s => s.Number)
+                            .ToList();
 
                         if (availableSeats.Count > 0)
                         {
@@ -482,9 +663,9 @@ class Program
         var document = GenerateUniqueDocument();
 
         return (
-        Name: "Usuario_" + userId + "" + uniqueId,
-        Document: document,
-        Email: "usuario" + userId + "" + uniqueId + "@email.com"
+            Name: "Usuario_" + userId + "" + uniqueId,
+            Document: document,
+            Email: "usuario" + userId + "" + uniqueId + "@email.com"
         );
     }
 
@@ -519,9 +700,9 @@ class Program
                     };
 
                     var content = new StringContent(
-                    JsonSerializer.Serialize(request, _jsonOptions),
-                    Encoding.UTF8,
-                    "application/json");
+                        JsonSerializer.Serialize(request, _jsonOptions),
+                        Encoding.UTF8,
+                        "application/json");
 
                     var response = await _httpClient.PostAsync("/api/reservations", content);
                     var responseBody = await response.Content.ReadAsStringAsync();
@@ -602,9 +783,9 @@ class Program
                     };
 
                     var content = new StringContent(
-                    JsonSerializer.Serialize(request, _jsonOptions),
-                    Encoding.UTF8,
-                    "application/json");
+                        JsonSerializer.Serialize(request, _jsonOptions),
+                        Encoding.UTF8,
+                        "application/json");
 
                     var response = await _httpClient.PostAsync("/api/reservations", content);
                     var responseBody = await response.Content.ReadAsStringAsync();
@@ -652,101 +833,6 @@ class Program
         Console.WriteLine("Esperado: " + seatNumbers.Count + " sucessos (todos assentos diferentes)");
     }
 
-    static async Task TestConcurrentConfirmations(string tripId, List<string> seatNumbers)
-    {
-        var seatNumber = seatNumbers.FirstOrDefault();
-        if (string.IsNullOrEmpty(seatNumber))
-        {
-            Console.WriteLine("ERRO: Nenhum assento disponivel para o teste de confirmacao");
-            return;
-        }
-
-        Console.WriteLine("TripId: " + tripId);
-        Console.WriteLine("Assento para reserva: " + seatNumber);
-        Console.WriteLine();
-
-        Console.WriteLine("Criando reserva para teste com usuario unico...");
-        var passenger = GenerateUniquePassenger(999);
-        var reservationId = await CreateReservation(tripId, seatNumber, passenger.Name, passenger.Document);
-
-        if (string.IsNullOrEmpty(reservationId))
-        {
-            Console.WriteLine("ERRO: Nao foi possivel criar a reserva para teste");
-            return;
-        }
-
-        Console.WriteLine("Reserva criada: " + reservationId);
-        Console.WriteLine();
-        Console.WriteLine("5 usuarios tentando confirmar a mesma reserva simultaneamente...");
-        Console.WriteLine();
-
-        var tasks = new List<Task<(int Attempt, bool Success, string Message, string StatusCode, string ErrorDetail)>>();
-
-        for (int i = 1; i <= 5; i++)
-        {
-            var attempt = i;
-            tasks.Add(Task.Run(async () =>
-            {
-                try
-                {
-                    var request = new
-                    {
-                        ReservationId = reservationId,
-                        PaymentMethod = "Cartao de Credito",
-                        Observations = "Tentativa " + attempt
-                    };
-
-                    var content = new StringContent(
-                    JsonSerializer.Serialize(request, _jsonOptions),
-                    Encoding.UTF8,
-                    "application/json");
-
-                    var response = await _httpClient.PutAsync("/api/reservations/" + reservationId + "/confirm", content);
-                    var responseBody = await response.Content.ReadAsStringAsync();
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        return (attempt, true, "Confirmacao realizada com sucesso", response.StatusCode.ToString(), "");
-                    }
-                    else
-                    {
-                        return (attempt, false, "Erro: " + response.StatusCode, response.StatusCode.ToString(), responseBody);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    return (attempt, false, "Excecao: " + ex.Message, "Error", "");
-                }
-            }));
-        }
-
-        var results = await Task.WhenAll(tasks);
-
-        foreach (var result in results.OrderBy(r => r.Attempt))
-        {
-            if (result.Success)
-            {
-                Console.WriteLine("Tentativa " + result.Attempt + ": SUCESSO - " + result.Message);
-            }
-            else
-            {
-                Console.WriteLine("Tentativa " + result.Attempt + ": FALHA - " + result.Message);
-                if (!string.IsNullOrEmpty(result.ErrorDetail))
-                {
-                    var error = result.ErrorDetail.Length > 200 ? result.ErrorDetail.Substring(0, 200) + "..." : result.ErrorDetail;
-                    Console.WriteLine(" Detalhe: " + error);
-                }
-            }
-        }
-
-        var successCount = results.Count(r => r.Success);
-        var failureCount = results.Count(r => !r.Success);
-
-        Console.WriteLine();
-        Console.WriteLine("Resultado: " + successCount + " sucesso(s), " + failureCount + " falha(s)");
-        Console.WriteLine("Esperado: 1 sucesso (apenas 1 consegue confirmar), 4 falhas");
-    }
-
     static async Task<string> CreateReservation(string tripId, string seatNumber, string name, string document)
     {
         try
@@ -765,9 +851,9 @@ class Program
             };
 
             var content = new StringContent(
-            JsonSerializer.Serialize(request, _jsonOptions),
-            Encoding.UTF8,
-            "application/json");
+                JsonSerializer.Serialize(request, _jsonOptions),
+                Encoding.UTF8,
+                "application/json");
 
             var response = await _httpClient.PostAsync("/api/reservations", content);
             var responseBody = await response.Content.ReadAsStringAsync();
@@ -791,6 +877,10 @@ class Program
             return null;
         }
     }
+
+    // ============================================
+    // CLASSES DE RESPOSTA
+    // ============================================
 
     public class RedisHealthResponse
     {

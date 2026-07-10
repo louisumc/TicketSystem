@@ -15,18 +15,22 @@ namespace TicketSystem.Infrastructure.Workers
         private readonly TimeSpan _interval;
         private readonly bool _isEnabled;
         private readonly IModel _channel;
+        private readonly string _instanceId;
 
         public ReservationExpirationWorker(
-        ILogger<ReservationExpirationWorker> logger,
-        IServiceProvider serviceProvider,
-        IConfiguration configuration,
-        IConnection connection)
+            ILogger<ReservationExpirationWorker> logger,
+            IServiceProvider serviceProvider,
+            IConfiguration configuration,
+            IConnection connection)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
-            _interval = TimeSpan.FromMinutes(configuration.GetValue<int>("Workers:ReservationExpirationIntervalMinutes", 1));
+            _interval = TimeSpan.FromSeconds(
+                configuration.GetValue<int>("Workers:ReservationExpirationIntervalSeconds", 5)
+            );
             _isEnabled = configuration.GetValue<bool>("Workers:ReservationExpirationEnabled", true);
             _channel = connection.CreateModel();
+            _instanceId = Guid.NewGuid().ToString();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,7 +41,10 @@ namespace TicketSystem.Infrastructure.Workers
                 return;
             }
 
-            _logger.LogInformation("ReservationExpirationWorker iniciado. Intervalo: {Interval} minutos", _interval.TotalMinutes);
+            _logger.LogInformation(
+                "ReservationExpirationWorker [{InstanceId}] iniciado. Intervalo: {Interval} segundos",
+                _instanceId, _interval.TotalSeconds
+            );
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -53,7 +60,7 @@ namespace TicketSystem.Infrastructure.Workers
                 await Task.Delay(_interval, stoppingToken);
             }
 
-            _logger.LogInformation("ReservationExpirationWorker finalizado");
+            _logger.LogInformation("ReservationExpirationWorker [{InstanceId}] finalizado", _instanceId);
         }
 
         private async Task ProcessExpiredReservations(CancellationToken cancellationToken)
@@ -61,45 +68,74 @@ namespace TicketSystem.Infrastructure.Workers
             using var scope = _serviceProvider.CreateScope();
             var reservationService = scope.ServiceProvider.GetRequiredService<IReservationService>();
             var eventPublisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var lockService = scope.ServiceProvider.GetRequiredService<IDistributedLockService>();
 
-            _logger.LogDebug("Verificando reservas expiradas...");
+            _logger.LogInformation("ReservationExpirationWorker: Verificando reservas expiradas...");
 
-            var expiredReservations = await reservationService.GetExpiredReservationsAsync(cancellationToken);
+            var lockKey = "reservation:expiration:lock";
 
-            if (!expiredReservations.Any())
+            if (!await lockService.TryAcquireLockAsync(lockKey, TimeSpan.FromSeconds(30), cancellationToken))
             {
-                _logger.LogDebug("Nenhuma reserva expirada encontrada");
+                _logger.LogDebug("Outra instância está processando expirações. Pulando ciclo.");
                 return;
             }
 
-            var count = expiredReservations.Count();
-            _logger.LogInformation("Encontradas {Count} reservas expiradas", count);
-
-            foreach (var reservation in expiredReservations)
+            try
             {
-                try
-                {
-                    await reservationService.CancelReservationAsync(reservation.Id);
+                var expiredReservations = await reservationService.GetExpiredReservationsAsync(cancellationToken);
 
-                    var expiredEvent = new ReservationExpiredEvent
+                if (!expiredReservations.Any())
+                {
+                    _logger.LogDebug("Nenhuma reserva expirada encontrada");
+                    return;
+                }
+
+                var count = expiredReservations.Count();
+                _logger.LogInformation("Encontradas {Count} reservas expiradas", count);
+
+                foreach (var reservation in expiredReservations)
+                {
+                    try
                     {
-                        ReservationId = reservation.Id,
-                        TripId = reservation.TripId,
-                        PassengerId = reservation.PassengerId,
-                        PassengerName = reservation.PassengerName,
-                        PassengerEmail = reservation.PassengerEmail,
-                        SeatNumbers = reservation.Seats.Select(s => s.SeatNumber).ToList(),
-                        ExpiredAt = DateTime.UtcNow
-                    };
+                        _logger.LogWarning(
+                            "Processando reserva expirada: {ReservationId} - Passageiro: {PassengerName} - Expirou em: {ExpiresAt}",
+                            reservation.Id, reservation.PassengerName, reservation.ExpiresAt
+                        );
 
-                    await eventPublisher.PublishAsync(expiredEvent, cancellationToken);
+                        await reservationService.CancelReservationAsync(reservation.Id);
 
-                    _logger.LogInformation("Reserva expirada processada: {ReservationId}", reservation.Id);
+                        _logger.LogInformation(
+                            "Reserva expirada cancelada e assentos liberados: {ReservationId}",
+                            reservation.Id
+                        );
+
+                        var expiredEvent = new ReservationExpiredEvent
+                        {
+                            ReservationId = reservation.Id,
+                            TripId = reservation.TripId,
+                            PassengerId = reservation.PassengerId,
+                            PassengerName = reservation.PassengerName,
+                            PassengerEmail = reservation.PassengerEmail,
+                            SeatNumbers = reservation.Seats.Select(s => s.SeatNumber).ToList(),
+                            ExpiredAt = DateTime.UtcNow
+                        };
+
+                        await eventPublisher.PublishAsync(expiredEvent, cancellationToken);
+
+                        _logger.LogInformation(
+                            "ReservationExpiredEvent publicado para: {ReservationId}",
+                            reservation.Id
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Erro ao processar reserva expirada: {ReservationId}", reservation.Id);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Erro ao processar reserva expirada: {ReservationId}", reservation.Id);
-                }
+            }
+            finally
+            {
+                await lockService.ReleaseLockAsync(lockKey, cancellationToken);
             }
         }
 

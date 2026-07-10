@@ -17,10 +17,10 @@ namespace TicketSystem.Infrastructure.Services
         private readonly IConfiguration _configuration;
 
         public CacheReservationService(
-        IReservationService innerService,
-        ICacheService cacheService,
-        ILogger<CacheReservationService> logger,
-        IConfiguration configuration)
+            IReservationService innerService,
+            ICacheService cacheService,
+            ILogger<CacheReservationService> logger,
+            IConfiguration configuration)
         {
             _innerService = innerService;
             _cacheService = cacheService;
@@ -52,6 +52,15 @@ namespace TicketSystem.Infrastructure.Services
             await InvalidateReservationCacheAsync(result.Id);
             return result;
         }
+
+#if DEBUG
+        public async Task<ReservationDto> CreateTestReservationAsync(CreateReservationDto createDto, TimeSpan? customExpiration = null)
+        {
+            var result = await _innerService.CreateTestReservationAsync(createDto, customExpiration);
+            await InvalidateReservationCacheAsync(result.Id);
+            return result;
+        }
+#endif
 
         public async Task<ReservationDto> ConfirmReservationAsync(ConfirmReservationDto confirmDto)
         {

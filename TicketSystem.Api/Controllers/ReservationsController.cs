@@ -28,8 +28,20 @@ namespace TicketSystem.Api.Controllers
         {
             var reservation = await _reservationService.CreateReservationAsync(createDto);
             return CreatedAtAction(nameof(GetById), new { id = reservation.Id },
-            new ApiResponse<ReservationDto>(reservation, "Reserva criada com sucesso"));
+                new ApiResponse<ReservationDto>(reservation, "Reserva criada com sucesso"));
         }
+
+#if DEBUG
+        [HttpPost("test")]
+        public async Task<IActionResult> CreateTestReservation([FromBody] CreateReservationDto createDto, [FromQuery] int expirationSeconds = 3)
+        {
+            var expiration = TimeSpan.FromSeconds(expirationSeconds);
+            var reservation = await _reservationService.CreateTestReservationAsync(createDto, expiration);
+            
+            return CreatedAtAction(nameof(GetById), new { id = reservation.Id },
+                new ApiResponse<ReservationDto>(reservation, $"Reserva de teste criada com expiracao de {expirationSeconds} segundos"));
+        }
+#endif
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)

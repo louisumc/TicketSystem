@@ -28,26 +28,26 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Configurar Serilog
 Log.Logger = new LoggerConfiguration()
-.ReadFrom.Configuration(builder.Configuration)
-.Enrich.FromLogContext()
-.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-.WriteTo.File("logs/ticketsystem-.txt",
-rollingInterval: RollingInterval.Day,
-outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-.CreateLogger();
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File("logs/ticketsystem-.txt",
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .CreateLogger();
 
 builder.Host.UseSerilog();
 
 // Configure Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-options.UseSqlServer(
-builder.Configuration.GetConnectionString("DefaultConnection"),
-sqlOptions => sqlOptions.EnableRetryOnFailure(
-maxRetryCount: 5,
-maxRetryDelay: TimeSpan.FromSeconds(10),
-errorNumbersToAdd: null
-)
-));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null
+        )
+    ));
 
 // Configure Redis
 var redisEnabled = builder.Configuration.GetValue<bool>("Redis:Enabled");
@@ -90,8 +90,8 @@ else
 
 // Health Checks
 builder.Services.AddHealthChecks()
-.AddCheck<RedisHealthCheck>("redis")
-.AddDbContextCheck<ApplicationDbContext>("database");
+    .AddCheck<RedisHealthCheck>("redis")
+    .AddDbContextCheck<ApplicationDbContext>("database");
 
 // Configure AutoMapper
 builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
@@ -124,20 +124,26 @@ builder.Services.Decorate<ITripService, CacheTripService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.Decorate<IReservationService, CacheReservationService>();
 
-// Registra consumers como hosted services
+// ============================================
+// CORREÇÃO: REGISTRAR APENAS OS WORKERS, NÃO OS CONSUMIDORES DUPLICADOS
+// ============================================
+
+// Workers - Responsáveis pela lógica de negócio
+builder.Services.AddHostedService<ReservationExpirationWorker>();
+builder.Services.AddHostedService<TicketGenerationWorker>();     // Consome "reservation.confirmed" e gera tickets
+builder.Services.AddHostedService<EmailNotificationWorker>();    // Consome "ticket.generated" e envia emails
+builder.Services.AddHostedService<PaymentRetryWorker>();         // Consome "payment.failed" e tenta novamente
+
+// APENAS UM CONSUMIDOR PARA CADA FILA
+// REMOVER: builder.Services.AddHostedService<ReservationCreatedConsumer>();
+// REMOVER: builder.Services.AddHostedService<ReservationConfirmedConsumer>();
+// REMOVER: builder.Services.AddHostedService<TicketGeneratedConsumer>();
+
+// PaymentFailedConsumer - Responsável por cancelar reservas após falha de pagamento
 if (rabbitMQEnabled)
 {
-    builder.Services.AddHostedService<ReservationCreatedConsumer>();
-    builder.Services.AddHostedService<ReservationConfirmedConsumer>();
     builder.Services.AddHostedService<PaymentFailedConsumer>();
-    builder.Services.AddHostedService<TicketGeneratedConsumer>();
 }
-
-// Workers
-builder.Services.AddHostedService<ReservationExpirationWorker>();
-builder.Services.AddHostedService<TicketGenerationWorker>();
-builder.Services.AddHostedService<EmailNotificationWorker>();
-builder.Services.AddHostedService<PaymentRetryWorker>();
 
 // Email Service
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
@@ -202,4 +208,3 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
-

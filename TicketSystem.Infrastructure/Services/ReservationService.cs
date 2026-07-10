@@ -1,4 +1,5 @@
-﻿using AutoMapper;
+﻿// FILENAME: TicketSystem.Infrastructure/Services/ReservationService.cs
+using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -29,18 +30,18 @@ namespace TicketSystem.Infrastructure.Services
         private const int EXPIRATION_MINUTES = 15;
 
         public ReservationService(
-        IRepository<Reservation> reservationRepository,
-        ApplicationDbContext context,
-        IRepository<Trip> tripRepository,
-        IRepository<Seat> seatRepository,
-        IRepository<Passenger> passengerRepository,
-        IRepository<ReservationSeat> reservationSeatRepository,
-        IPassengerService passengerService,
-        IDistributedLockService lockService,
-        IMapper mapper,
-        ILogger<ReservationService> logger,
-        IServiceProvider serviceProvider)
-        : base(reservationRepository)
+            IRepository<Reservation> reservationRepository,
+            ApplicationDbContext context,
+            IRepository<Trip> tripRepository,
+            IRepository<Seat> seatRepository,
+            IRepository<Passenger> passengerRepository,
+            IRepository<ReservationSeat> reservationSeatRepository,
+            IPassengerService passengerService,
+            IDistributedLockService lockService,
+            IMapper mapper,
+            ILogger<ReservationService> logger,
+            IServiceProvider serviceProvider)
+            : base(reservationRepository)
         {
             _context = context;
             _tripRepository = tripRepository;
@@ -54,10 +55,13 @@ namespace TicketSystem.Infrastructure.Services
             _serviceProvider = serviceProvider;
         }
 
+        // ============================================
+        // MÉTODO PRINCIPAL - CRIAR RESERVA
+        // ============================================
         public async Task<ReservationDto> CreateReservationAsync(CreateReservationDto createDto)
         {
             _logger.LogInformation("Iniciando criacao de reserva para TripId: {TripId}, SeatNumbers: {SeatNumbers}",
-            createDto.TripId, string.Join(", ", createDto.SeatNumbers));
+                createDto.TripId, string.Join(", ", createDto.SeatNumbers));
 
             var lockKey = LockKeys.GetTripReservationKey(createDto.TripId);
             _logger.LogDebug("Tentando adquirir lock para viagem: {TripId}", createDto.TripId);
@@ -76,26 +80,26 @@ namespace TicketSystem.Infrastructure.Services
             if (trip.Status == TripStatus.Completed || trip.Status == TripStatus.Cancelled)
             {
                 _logger.LogWarning("Tentativa de reserva em viagem finalizada/cancelada. TripId: {TripId}, Status: {Status}",
-                createDto.TripId, trip.Status);
+                    createDto.TripId, trip.Status);
                 throw new InvalidOperationException("Nao e possivel reservar assentos para uma viagem finalizada ou cancelada");
             }
 
             if (trip.DepartureTime <= DateTime.UtcNow)
             {
                 _logger.LogWarning("Tentativa de reserva em viagem que ja partiu. TripId: {TripId}, DepartureTime: {DepartureTime}",
-                createDto.TripId, trip.DepartureTime);
+                    createDto.TripId, trip.DepartureTime);
                 throw new InvalidOperationException("Nao e possivel reservar assentos para uma viagem que ja partiu");
             }
 
             var passenger = await _passengerService.GetOrCreatePassengerAsync(createDto.Passenger);
             _logger.LogDebug("Passageiro obtido/criado. PassengerId: {PassengerId}, Document: {Document}",
-            passenger.Id, passenger.Document);
+                passenger.Id, passenger.Document);
 
             var hasPending = await _passengerService.HasPendingReservationForTripAsync(passenger.Document, trip.Id);
             if (hasPending)
             {
                 _logger.LogWarning("Passageiro ja possui reserva pendente. PassengerId: {PassengerId}, TripId: {TripId}",
-                passenger.Id, trip.Id);
+                    passenger.Id, trip.Id);
                 throw new InvalidOperationException("Voce ja possui uma reserva pendente para esta viagem");
             }
 
@@ -107,22 +111,26 @@ namespace TicketSystem.Infrastructure.Services
                 _logger.LogDebug("Verificando assento: {SeatNumber}", seatNumber);
 
                 var seatList = await _seatRepository.FindAsync(s =>
-                s.TripId == trip.Id &&
-                s.Number == seatNumber &&
-                s.IsActive);
+                    s.TripId == trip.Id &&
+                    s.Number == seatNumber &&
+                    s.IsActive);
 
                 var seat = seatList.FirstOrDefault();
                 if (seat == null)
                 {
                     _logger.LogWarning("Assento nao encontrado. TripId: {TripId}, SeatNumber: {SeatNumber}",
-                    trip.Id, seatNumber);
+                        trip.Id, seatNumber);
                     throw new KeyNotFoundException("Assento " + seatNumber + " nao encontrado nesta viagem");
                 }
 
+                // ============================================
+                // REMOVIDO: Verificação de ReservationSeat ativo
+                // Apenas verifica o status do assento
+                // ============================================
                 if (seat.Status != SeatStatus.Available)
                 {
                     _logger.LogWarning("Assento nao esta disponivel. TripId: {TripId}, SeatNumber: {SeatNumber}, Status: {Status}",
-                    trip.Id, seatNumber, seat.Status);
+                        trip.Id, seatNumber, seat.Status);
                     throw new InvalidOperationException("Assento " + seatNumber + " nao esta disponivel");
                 }
 
@@ -160,23 +168,30 @@ namespace TicketSystem.Infrastructure.Services
 
                     foreach (var seat in seats)
                     {
-                        seat.Status = SeatStatus.Reserved;
-                        seat.PassengerName = passenger.Name;
-                        seat.PassengerDocument = passenger.Document;
-                        seat.UpdatedAt = DateTime.UtcNow;
-                        await _seatRepository.UpdateAsync(seat);
+                        // Re-verificar se o assento ainda está disponível dentro da transação
+                        var currentSeat = await _seatRepository.GetByIdAsync(seat.Id);
+                        if (currentSeat == null || currentSeat.Status != SeatStatus.Available)
+                        {
+                            throw new InvalidOperationException($"Assento {seat.Number} nao esta mais disponivel");
+                        }
+
+                        currentSeat.Status = SeatStatus.Reserved;
+                        currentSeat.PassengerName = passenger.Name;
+                        currentSeat.PassengerDocument = passenger.Document;
+                        currentSeat.UpdatedAt = DateTime.UtcNow;
+                        await _seatRepository.UpdateAsync(currentSeat);
 
                         var reservationSeat = new ReservationSeat
                         {
                             ReservationId = createdReservation.Id,
-                            SeatId = seat.Id,
-                            Price = trip.Price * (seat.PriceMultiplier ?? 1.0m),
+                            SeatId = currentSeat.Id,
+                            Price = trip.Price * (currentSeat.PriceMultiplier ?? 1.0m),
                             IsActive = true,
                             CreatedAt = DateTime.UtcNow
                         };
 
                         await _reservationSeatRepository.AddAsync(reservationSeat);
-                        _logger.LogDebug("Assento associado a reserva. SeatId: {SeatId}, Number: {Number}", seat.Id, seat.Number);
+                        _logger.LogDebug("Assento associado a reserva. SeatId: {SeatId}, Number: {Number}", currentSeat.Id, currentSeat.Number);
                     }
 
                     await transaction.CommitAsync();
@@ -223,14 +238,170 @@ namespace TicketSystem.Infrastructure.Services
             });
         }
 
+#if DEBUG
+        public async Task<ReservationDto> CreateTestReservationAsync(CreateReservationDto createDto, TimeSpan? customExpiration = null)
+        {
+            _logger.LogInformation("Iniciando criacao de reserva de teste para TripId: {TripId}, SeatNumbers: {SeatNumbers}",
+                createDto.TripId, string.Join(", ", createDto.SeatNumbers));
+
+            var lockKey = LockKeys.GetTripReservationKey(createDto.TripId);
+
+            using var lockHandle = await _lockService.AcquireLockAsync(lockKey, TimeSpan.FromSeconds(10));
+
+            var trip = await _tripRepository.GetByIdAsync(createDto.TripId);
+            if (trip == null)
+            {
+                throw new KeyNotFoundException("Viagem com ID " + createDto.TripId + " nao encontrada");
+            }
+
+            if (trip.Status == TripStatus.Completed || trip.Status == TripStatus.Cancelled)
+            {
+                throw new InvalidOperationException("Nao e possivel reservar assentos para uma viagem finalizada ou cancelada");
+            }
+
+            if (trip.DepartureTime <= DateTime.UtcNow)
+            {
+                throw new InvalidOperationException("Nao e possivel reservar assentos para uma viagem que ja partiu");
+            }
+
+            var passenger = await _passengerService.GetOrCreatePassengerAsync(createDto.Passenger);
+
+            var hasPending = await _passengerService.HasPendingReservationForTripAsync(passenger.Document, trip.Id);
+            if (hasPending)
+            {
+                throw new InvalidOperationException("Voce ja possui uma reserva pendente para esta viagem");
+            }
+
+            var seats = new List<Seat>();
+            var seatNumbers = new List<string>();
+
+            foreach (var seatNumber in createDto.SeatNumbers)
+            {
+                var seatList = await _seatRepository.FindAsync(s =>
+                    s.TripId == trip.Id &&
+                    s.Number == seatNumber &&
+                    s.IsActive);
+
+                var seat = seatList.FirstOrDefault();
+                if (seat == null)
+                {
+                    throw new KeyNotFoundException("Assento " + seatNumber + " nao encontrado nesta viagem");
+                }
+
+                // REMOVIDO: Verificação de ReservationSeat ativo
+                if (seat.Status != SeatStatus.Available)
+                {
+                    throw new InvalidOperationException("Assento " + seatNumber + " nao esta disponivel");
+                }
+
+                seats.Add(seat);
+                seatNumbers.Add(seatNumber);
+            }
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+                try
+                {
+                    var totalAmount = seats.Sum(s => trip.Price * (s.PriceMultiplier ?? 1.0m));
+
+                    var expiration = customExpiration ?? TimeSpan.FromMinutes(EXPIRATION_MINUTES);
+
+                    var reservation = new Reservation
+                    {
+                        TripId = trip.Id,
+                        PassengerId = passenger.Id,
+                        ReservationDate = DateTime.UtcNow,
+                        ExpiresAt = DateTime.UtcNow.Add(expiration),
+                        Status = ReservationStatus.Pending,
+                        TotalAmount = totalAmount,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    var createdReservation = await _repository.AddAsync(reservation);
+                    _logger.LogInformation("Reserva de teste criada. ReservationId: {ReservationId}, Expira em: {Expiration}",
+                        createdReservation.Id, expiration);
+
+                    foreach (var seat in seats)
+                    {
+                        var currentSeat = await _seatRepository.GetByIdAsync(seat.Id);
+                        if (currentSeat == null || currentSeat.Status != SeatStatus.Available)
+                        {
+                            throw new InvalidOperationException($"Assento {seat.Number} nao esta mais disponivel");
+                        }
+
+                        currentSeat.Status = SeatStatus.Reserved;
+                        currentSeat.PassengerName = passenger.Name;
+                        currentSeat.PassengerDocument = passenger.Document;
+                        currentSeat.UpdatedAt = DateTime.UtcNow;
+                        await _seatRepository.UpdateAsync(currentSeat);
+
+                        var reservationSeat = new ReservationSeat
+                        {
+                            ReservationId = createdReservation.Id,
+                            SeatId = currentSeat.Id,
+                            Price = trip.Price * (currentSeat.PriceMultiplier ?? 1.0m),
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        await _reservationSeatRepository.AddAsync(reservationSeat);
+                    }
+
+                    await transaction.CommitAsync();
+
+                    var createdEvent = new ReservationCreatedEvent
+                    {
+                        ReservationId = createdReservation.Id,
+                        TripId = trip.Id,
+                        PassengerId = passenger.Id,
+                        PassengerName = passenger.Name,
+                        PassengerEmail = passenger.Email,
+                        PassengerDocument = passenger.Document,
+                        SeatNumbers = seatNumbers,
+                        TotalAmount = totalAmount,
+                        ReservationDate = reservation.ReservationDate,
+                        ExpiresAt = reservation.ExpiresAt,
+                        TripOrigin = trip.Origin,
+                        TripDestination = trip.Destination,
+                        TripDepartureTime = trip.DepartureTime,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    try
+                    {
+                        var eventPublisher = _serviceProvider.GetRequiredService<IEventPublisher>();
+                        await eventPublisher.PublishAsync(createdEvent);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Erro ao publicar evento");
+                    }
+
+                    return await GetReservationByIdAsync(createdReservation.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Erro ao criar reserva de teste");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
+        }
+#endif
+
         public async Task<ReservationDto> GetReservationByIdAsync(Guid id)
         {
             var reservation = await _context.Reservations
-            .Include(r => r.Trip)
-            .Include(r => r.Passenger)
-            .Include(r => r.ReservationSeats)
-            .ThenInclude(rs => rs.Seat)
-            .FirstOrDefaultAsync(r => r.Id == id && r.IsActive);
+                .Include(r => r.Trip)
+                .Include(r => r.Passenger)
+                .Include(r => r.ReservationSeats)
+                .ThenInclude(rs => rs.Seat)
+                .FirstOrDefaultAsync(r => r.Id == id && r.IsActive);
 
             if (reservation == null)
                 throw new KeyNotFoundException($"Reserva com ID {id} nao encontrada");
@@ -249,11 +420,11 @@ namespace TicketSystem.Infrastructure.Services
                 try
                 {
                     var reservation = await _context.Reservations
-                    .Include(r => r.ReservationSeats)
-                    .ThenInclude(rs => rs.Seat)
-                    .Include(r => r.Trip)
-                    .Include(r => r.Passenger)
-                    .FirstOrDefaultAsync(r => r.Id == confirmDto.ReservationId && r.IsActive);
+                        .Include(r => r.ReservationSeats)
+                        .ThenInclude(rs => rs.Seat)
+                        .Include(r => r.Trip)
+                        .Include(r => r.Passenger)
+                        .FirstOrDefaultAsync(r => r.Id == confirmDto.ReservationId && r.IsActive);
 
                     if (reservation == null)
                         throw new KeyNotFoundException($"Reserva com ID {confirmDto.ReservationId} nao encontrada");
@@ -266,6 +437,23 @@ namespace TicketSystem.Infrastructure.Services
 
                     if (reservation.Trip.Status == TripStatus.Completed || reservation.Trip.Status == TripStatus.Cancelled)
                         throw new InvalidOperationException("Nao e possivel confirmar reserva para uma viagem finalizada ou cancelada");
+
+                    if (string.IsNullOrEmpty(confirmDto.PaymentMethod))
+                    {
+                        _logger.LogWarning("Tentativa de confirmar reserva sem metodo de pagamento. ReservationId: {ReservationId}",
+                            confirmDto.ReservationId);
+                        throw new InvalidOperationException("Pagamento nao processado. Metodo de pagamento nao informado.");
+                    }
+
+                    if (string.IsNullOrEmpty(confirmDto.Observations) || !confirmDto.Observations.Contains("Transacao:"))
+                    {
+                        _logger.LogWarning("Tentativa de confirmar reserva sem transacao de pagamento. ReservationId: {ReservationId}",
+                            confirmDto.ReservationId);
+                        throw new InvalidOperationException("Pagamento nao processado. Transacao nao encontrada.");
+                    }
+
+                    _logger.LogInformation("Validacao de pagamento aprovada para reserva: {ReservationId}. Transacao: {Transaction}",
+                        confirmDto.ReservationId, confirmDto.Observations);
 
                     foreach (var reservationSeat in reservation.ReservationSeats)
                     {
@@ -286,9 +474,6 @@ namespace TicketSystem.Infrastructure.Services
 
                     await transaction.CommitAsync();
 
-                    // ============================================
-                    // PUBLICAR EVENTO DE RESERVA CONFIRMADA
-                    // ============================================
                     try
                     {
                         var eventPublisher = _serviceProvider.GetRequiredService<IEventPublisher>();
@@ -346,6 +531,9 @@ namespace TicketSystem.Infrastructure.Services
             return prefix + "-" + date + "-" + random + "-" + hash;
         }
 
+        // ============================================
+        // MÉTODO CANCELAR RESERVA - CORRIGIDO
+        // ============================================
         public async Task CancelReservationAsync(Guid reservationId)
         {
             var strategy = _context.Database.CreateExecutionStrategy();
@@ -357,9 +545,9 @@ namespace TicketSystem.Infrastructure.Services
                 try
                 {
                     var reservation = await _context.Reservations
-                    .Include(r => r.ReservationSeats)
-                    .ThenInclude(rs => rs.Seat)
-                    .FirstOrDefaultAsync(r => r.Id == reservationId && r.IsActive);
+                        .Include(r => r.ReservationSeats)
+                        .ThenInclude(rs => rs.Seat)
+                        .FirstOrDefaultAsync(r => r.Id == reservationId);
 
                     if (reservation == null)
                         throw new KeyNotFoundException($"Reserva com ID {reservationId} nao encontrada");
@@ -373,16 +561,63 @@ namespace TicketSystem.Infrastructure.Services
                     if (reservation.Status == ReservationStatus.Expired)
                         throw new InvalidOperationException("Reserva ja expirou");
 
+                    _logger.LogInformation(
+                        "CancelReservationAsync: Cancelando reserva {ReservationId}. Status atual: {Status}. Assentos: {SeatCount}",
+                        reservationId, reservation.Status, reservation.ReservationSeats.Count
+                    );
+
                     foreach (var reservationSeat in reservation.ReservationSeats)
                     {
-                        var seat = reservationSeat.Seat;
-                        if (seat.Status == SeatStatus.Reserved)
+                        // ============================================
+                        // DESATIVAR O RESERVATIONSEAT
+                        // ============================================
+                        if (reservationSeat.IsActive)
                         {
-                            seat.Status = SeatStatus.Available;
-                            seat.PassengerName = null;
-                            seat.PassengerDocument = null;
-                            seat.UpdatedAt = DateTime.UtcNow;
-                            await _seatRepository.UpdateAsync(seat);
+                            reservationSeat.IsActive = false;
+                            _logger.LogInformation(
+                                "CancelReservationAsync: ReservationSeat {ReservationSeatId} desativado",
+                                reservationSeat.Id
+                            );
+                        }
+
+                        // ============================================
+                        // CORRECAO: BUSCAR O ASSENTO DIRETAMENTE DO BANCO
+                        // ============================================
+                        var seat = await _seatRepository.GetByIdAsync(reservationSeat.SeatId);
+
+                        if (seat != null)
+                        {
+                            _logger.LogInformation(
+                                "CancelReservationAsync: Assento {SeatNumber} - Status atual: {Status}",
+                                seat.Number, seat.Status
+                            );
+
+                            if (seat.Status == SeatStatus.Reserved)
+                            {
+                                seat.Status = SeatStatus.Available;
+                                seat.PassengerName = null;
+                                seat.PassengerDocument = null;
+                                seat.UpdatedAt = DateTime.UtcNow;
+                                await _seatRepository.UpdateAsync(seat);
+                                _logger.LogInformation(
+                                    "CancelReservationAsync: Assento {SeatNumber} liberado (Status: Reserved -> Available)",
+                                    seat.Number
+                                );
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    "CancelReservationAsync: Assento {SeatNumber} nao estava Reserved (Status: {Status})",
+                                    seat.Number, seat.Status
+                                );
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "CancelReservationAsync: Assento com Id {SeatId} nao encontrado",
+                                reservationSeat.SeatId
+                            );
                         }
                     }
 
@@ -392,9 +627,15 @@ namespace TicketSystem.Infrastructure.Services
                     await _repository.UpdateAsync(reservation);
 
                     await transaction.CommitAsync();
+
+                    _logger.LogInformation(
+                        "CancelReservationAsync: Reserva {ReservationId} cancelada com sucesso. ReservationSeats desativados e assentos liberados.",
+                        reservationId
+                    );
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.LogError(ex, "CancelReservationAsync: Erro ao cancelar reserva {ReservationId}", reservationId);
                     await transaction.RollbackAsync();
                     throw;
                 }
@@ -404,17 +645,17 @@ namespace TicketSystem.Infrastructure.Services
         public async Task<AvailableSeatsDto> GetAvailableSeatsAsync(Guid tripId)
         {
             var trip = await _context.Trips
-            .Include(t => t.Bus)
-            .FirstOrDefaultAsync(t => t.Id == tripId && t.IsActive);
+                .Include(t => t.Bus)
+                .FirstOrDefaultAsync(t => t.Id == tripId && t.IsActive);
 
             if (trip == null)
                 throw new KeyNotFoundException($"Viagem com ID {tripId} nao encontrada");
 
             var seats = await _context.Seats
-            .Where(s => s.TripId == tripId && s.IsActive)
-            .OrderBy(s => s.Row)
-            .ThenBy(s => s.Column)
-            .ToListAsync();
+                .Where(s => s.TripId == tripId && s.IsActive)
+                .OrderBy(s => s.Row)
+                .ThenBy(s => s.Column)
+                .ToListAsync();
 
             var availableSeats = seats.Where(s => s.Status == SeatStatus.Available).ToList();
 
@@ -437,13 +678,13 @@ namespace TicketSystem.Infrastructure.Services
         public async Task<IEnumerable<ReservationDto>> GetReservationsByTripIdAsync(Guid tripId)
         {
             var reservations = await _context.Reservations
-            .Include(r => r.Trip)
-            .Include(r => r.Passenger)
-            .Include(r => r.ReservationSeats)
-            .ThenInclude(rs => rs.Seat)
-            .Where(r => r.TripId == tripId && r.IsActive)
-            .OrderByDescending(r => r.CreatedAt)
-            .ToListAsync();
+                .Include(r => r.Trip)
+                .Include(r => r.Passenger)
+                .Include(r => r.ReservationSeats)
+                .ThenInclude(rs => rs.Seat)
+                .Where(r => r.TripId == tripId && r.IsActive)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
 
             return reservations.Select(MapToDto);
         }
@@ -457,13 +698,13 @@ namespace TicketSystem.Infrastructure.Services
                 return new List<ReservationDto>();
 
             var reservations = await _context.Reservations
-            .Include(r => r.Trip)
-            .Include(r => r.Passenger)
-            .Include(r => r.ReservationSeats)
-            .ThenInclude(rs => rs.Seat)
-            .Where(r => r.PassengerId == passengerEntity.Id && r.IsActive)
-            .OrderByDescending(r => r.CreatedAt)
-            .ToListAsync();
+                .Include(r => r.Trip)
+                .Include(r => r.Passenger)
+                .Include(r => r.ReservationSeats)
+                .ThenInclude(rs => rs.Seat)
+                .Where(r => r.PassengerId == passengerEntity.Id && r.IsActive)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
 
             return reservations.Select(MapToDto);
         }
@@ -473,19 +714,24 @@ namespace TicketSystem.Infrastructure.Services
             var now = DateTime.UtcNow;
 
             var expiredReservations = await _context.Reservations
-            .Include(r => r.ReservationSeats)
-            .ThenInclude(rs => rs.Seat)
-            .Where(r => r.Status == ReservationStatus.Pending &&
-            r.ExpiresAt < now &&
-            r.IsActive)
-            .ToListAsync();
+                .Include(r => r.ReservationSeats)
+                .ThenInclude(rs => rs.Seat)
+                .Where(r => r.Status == ReservationStatus.Pending &&
+                            r.ExpiresAt < now &&
+                            r.IsActive)
+                .ToListAsync();
 
             foreach (var reservation in expiredReservations)
             {
                 foreach (var reservationSeat in reservation.ReservationSeats)
                 {
+                    if (reservationSeat.IsActive)
+                    {
+                        reservationSeat.IsActive = false;
+                    }
+
                     var seat = reservationSeat.Seat;
-                    if (seat.Status == SeatStatus.Reserved)
+                    if (seat != null && seat.Status == SeatStatus.Reserved)
                     {
                         seat.Status = SeatStatus.Available;
                         seat.PassengerName = null;
@@ -502,6 +748,7 @@ namespace TicketSystem.Infrastructure.Services
             if (expiredReservations.Any())
             {
                 await _context.SaveChangesAsync();
+                _logger.LogInformation("{Count} reservas expiradas processadas", expiredReservations.Count);
             }
         }
 
@@ -509,14 +756,28 @@ namespace TicketSystem.Infrastructure.Services
         {
             var now = DateTime.UtcNow;
 
+            _logger.LogInformation("GetExpiredReservationsAsync: Buscando reservas expiradas. Hora atual: {Now}", now);
+
             var expiredReservations = await _context.Reservations
-            .Include(r => r.Passenger)
-            .Include(r => r.ReservationSeats)
-            .ThenInclude(rs => rs.Seat)
-            .Where(r => r.Status == ReservationStatus.Pending &&
-            r.ExpiresAt < now &&
-            r.IsActive)
-            .ToListAsync(cancellationToken);
+                .Include(r => r.Passenger)
+                .Include(r => r.ReservationSeats)
+                .ThenInclude(rs => rs.Seat)
+                .Where(r => r.Status == ReservationStatus.Pending &&
+                            r.ExpiresAt < now)
+                .ToListAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "GetExpiredReservationsAsync: Encontradas {Count} reservas expiradas (ExpiresAt < {Now})",
+                expiredReservations.Count, now
+            );
+
+            foreach (var r in expiredReservations)
+            {
+                _logger.LogWarning(
+                    "Reserva expirada encontrada: Id={ReservationId}, ExpiresAt={ExpiresAt}, IsActive={IsActive}, Passageiro={PassengerName}",
+                    r.Id, r.ExpiresAt, r.IsActive, r.Passenger?.Name ?? "N/A"
+                );
+            }
 
             return expiredReservations.Select(r => new ExpiredReservationDto
             {
@@ -537,13 +798,13 @@ namespace TicketSystem.Infrastructure.Services
         public async Task<IEnumerable<ReservationDto>> GetAllReservationsAsync()
         {
             var reservations = await _context.Reservations
-            .Include(r => r.Trip)
-            .Include(r => r.Passenger)
-            .Include(r => r.ReservationSeats)
-            .ThenInclude(rs => rs.Seat)
-            .Where(r => r.IsActive)
-            .OrderByDescending(r => r.CreatedAt)
-            .ToListAsync();
+                .Include(r => r.Trip)
+                .Include(r => r.Passenger)
+                .Include(r => r.ReservationSeats)
+                .ThenInclude(rs => rs.Seat)
+                .Where(r => r.IsActive)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
 
             return reservations.Select(MapToDto);
         }

@@ -17,10 +17,10 @@ namespace TicketSystem.Api.Controllers
         private readonly ILogger<PaymentController> _logger;
 
         public PaymentController(
-        IPaymentService paymentService,
-        IReservationService reservationService,
-        IEventPublisher eventPublisher,
-        ILogger<PaymentController> logger)
+            IPaymentService paymentService,
+            IReservationService reservationService,
+            IEventPublisher eventPublisher,
+            ILogger<PaymentController> logger)
         {
             _paymentService = paymentService;
             _reservationService = reservationService;
@@ -53,6 +53,11 @@ namespace TicketSystem.Api.Controllers
 
             if (result.Success)
             {
+                // ============================================
+                // OBSERVAÇÃO IMPORTANTE:
+                // O PaymentController define o campo Observations com a transação
+                // Isso é usado pelo ReservationService para validar que o pagamento foi processado
+                // ============================================
                 var confirmDto = new ConfirmReservationDto
                 {
                     ReservationId = id,
@@ -73,7 +78,7 @@ namespace TicketSystem.Api.Controllers
             else
             {
                 _logger.LogWarning("Pagamento falhou para reserva: {ReservationId} - {FailureReason}",
-                id, result.FailureReason);
+                    id, result.FailureReason);
 
                 var failedEvent = new PaymentFailedEvent
                 {

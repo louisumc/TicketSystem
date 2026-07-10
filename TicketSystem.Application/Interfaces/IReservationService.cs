@@ -15,5 +15,9 @@ namespace TicketSystem.Application.Interfaces
         Task ExpirePendingReservationsAsync();
         Task<IEnumerable<ExpiredReservationDto>> GetExpiredReservationsAsync(CancellationToken cancellationToken = default);
         Task<IEnumerable<ReservationDto>> GetAllReservationsAsync();
+
+#if DEBUG
+        Task<ReservationDto> CreateTestReservationAsync(CreateReservationDto createDto, TimeSpan? customExpiration = null);
+#endif
     }
 }
