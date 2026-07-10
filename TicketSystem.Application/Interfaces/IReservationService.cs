@@ -13,5 +13,6 @@ namespace TicketSystem.Application.Interfaces
         Task<IEnumerable<ReservationDto>> GetReservationsByTripIdAsync(Guid tripId);
         Task<IEnumerable<ReservationDto>> GetReservationsByPassengerDocumentAsync(string document);
         Task ExpirePendingReservationsAsync();
+        Task<IEnumerable<ExpiredReservationDto>> GetExpiredReservationsAsync(CancellationToken cancellationToken = default);
     }
 }

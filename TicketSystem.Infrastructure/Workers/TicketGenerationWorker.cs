@@ -9,21 +9,22 @@ using System.Text.Json;
 using TicketSystem.Application.Events;
 using TicketSystem.Application.Interfaces;
 
-namespace TicketSystem.Infrastructure.Messaging.Consumers
+namespace TicketSystem.Infrastructure.Workers
 {
-    public class ReservationConfirmedConsumer : BackgroundService
+    public class TicketGenerationWorker : BackgroundService
     {
         private readonly IConnection _connection;
         private readonly IModel _channel;
-        private readonly ILogger<ReservationConfirmedConsumer> _logger;
+        private readonly ILogger<TicketGenerationWorker> _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly bool _isEnabled;
         private readonly JsonSerializerOptions _jsonOptions;
 
-        public ReservationConfirmedConsumer(
+        public TicketGenerationWorker(
         IConfiguration configuration,
-        ILogger<ReservationConfirmedConsumer> logger,
-        IServiceProvider serviceProvider)
+        ILogger<TicketGenerationWorker> logger,
+        IServiceProvider serviceProvider,
+        IConnection connection)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
@@ -37,40 +38,14 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
 
             if (!_isEnabled)
             {
-                _logger.LogInformation("RabbitMQ desabilitado. Consumer desativado.");
+                _logger.LogInformation("RabbitMQ desabilitado. TicketGenerationWorker desativado.");
                 return;
             }
 
-            try
-            {
-                var factory = new ConnectionFactory
-                {
-                    HostName = configuration.GetValue<string>("RabbitMQ:HostName", "localhost"),
-                    Port = configuration.GetValue<int>("RabbitMQ:Port", 5672),
-                    UserName = configuration.GetValue<string>("RabbitMQ:UserName", "guest"),
-                    Password = configuration.GetValue<string>("RabbitMQ:Password", "guest"),
-                    VirtualHost = configuration.GetValue<string>("RabbitMQ:VirtualHost", "/"),
-                    AutomaticRecoveryEnabled = true,
-                    NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
-                };
+            _connection = connection;
+            _channel = _connection.CreateModel();
 
-                _connection = factory.CreateConnection();
-                _channel = _connection.CreateModel();
-
-                var args = new Dictionary<string, object>
-{
-{ "x-dead-letter-exchange", "ticket.events.dlx" },
-{ "x-dead-letter-routing-key", "reservation.confirmed.dlq" }
-};
-                _channel.QueueDeclare("reservation.confirmed", durable: true, exclusive: false, autoDelete: false, arguments: args);
-
-                _logger.LogInformation("ReservationConfirmedConsumer inicializado");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao inicializar ReservationConfirmedConsumer");
-                throw;
-            }
+            _logger.LogInformation("TicketGenerationWorker inicializado");
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -97,15 +72,15 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
                         return;
                     }
 
-                    _logger.LogInformation("Processando evento de confirmacao de reserva: {ReservationId}", eventObj.ReservationId);
+                    _logger.LogInformation("Processando geracao de bilhete para reserva: {ReservationId}", eventObj.ReservationId);
 
-                    await ProcessReservationConfirmedAsync(eventObj, stoppingToken);
+                    await GenerateTicketAsync(eventObj, stoppingToken);
 
                     _channel.BasicAck(ea.DeliveryTag, false);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Erro ao processar evento de confirmacao de reserva");
+                    _logger.LogError(ex, "Erro ao processar geracao de bilhete");
                     _channel.BasicNack(ea.DeliveryTag, false, true);
                 }
             };
@@ -115,10 +90,25 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
             return Task.CompletedTask;
         }
 
-        private async Task ProcessReservationConfirmedAsync(ReservationConfirmedEvent eventObj, CancellationToken cancellationToken)
+        private async Task GenerateTicketAsync(ReservationConfirmedEvent eventObj, CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Gerando bilhete para reserva: {ReservationId}", eventObj.ReservationId);
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+
             var ticketCode = GenerateTicketCode(eventObj);
-            var qrCode = GenerateQrCode(ticketCode);
+            var ticketUrl = "/tickets/" + ticketCode + ".pdf";
+
+            var storagePath = Path.Combine("wwwroot", "tickets", ticketCode + ".pdf");
+            var directory = Path.GetDirectoryName(storagePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await File.WriteAllTextAsync(storagePath, "Ticket: " + ticketCode + "\nPassageiro: " + eventObj.PassengerName + "\nAssentos: " + string.Join(", ", eventObj.Seats.Select(s => s.Number)), cancellationToken);
+
+            _logger.LogInformation("Bilhete gerado: {TicketCode} - {TicketUrl}", ticketCode, ticketUrl);
 
             using var scope = _serviceProvider.CreateScope();
             var eventPublisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
@@ -142,13 +132,12 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
                 TripDestination = eventObj.TripDestination,
                 TripDepartureTime = eventObj.TripDepartureTime,
                 GeneratedAt = DateTime.UtcNow,
-                QrCode = qrCode
+                QrCode = GenerateQrCode(ticketCode)
             };
 
             await eventPublisher.PublishAsync(ticketEvent, cancellationToken);
 
-            _logger.LogInformation("Bilhete gerado para reserva: {ReservationId} | TicketCode: {TicketCode}",
-            eventObj.ReservationId, ticketCode);
+            _logger.LogInformation("TicketGeneratedEvent publicado para reserva: {ReservationId}", eventObj.ReservationId);
         }
 
         private string GenerateTicketCode(ReservationConfirmedEvent eventObj)

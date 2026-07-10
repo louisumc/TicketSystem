@@ -6,22 +6,26 @@ using RabbitMQ.Client.Events;
 using System.Text;
 using System.Text.Json;
 using TicketSystem.Application.Events;
+using TicketSystem.Application.Interfaces;
 
 namespace TicketSystem.Infrastructure.Messaging.Consumers
 {
-    public class TicketGeneratedConsumer : BackgroundService
+    public class ReservationCreatedConsumer : BackgroundService
     {
         private readonly IConnection _connection;
         private readonly IModel _channel;
-        private readonly ILogger<TicketGeneratedConsumer> _logger;
+        private readonly ILogger<ReservationCreatedConsumer> _logger;
+        private readonly IServiceProvider _serviceProvider;
         private readonly bool _isEnabled;
         private readonly JsonSerializerOptions _jsonOptions;
 
-        public TicketGeneratedConsumer(
+        public ReservationCreatedConsumer(
         IConfiguration configuration,
-        ILogger<TicketGeneratedConsumer> logger)
+        ILogger<ReservationCreatedConsumer> logger,
+        IServiceProvider serviceProvider)
         {
             _logger = logger;
+            _serviceProvider = serviceProvider;
             _isEnabled = configuration.GetValue<bool>("RabbitMQ:Enabled", false);
 
             _jsonOptions = new JsonSerializerOptions
@@ -55,15 +59,15 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
                 var args = new Dictionary<string, object>
 {
 { "x-dead-letter-exchange", "ticket.events.dlx" },
-{ "x-dead-letter-routing-key", "ticket.generated.dlq" }
+{ "x-dead-letter-routing-key", "reservation.created.dlq" }
 };
-                _channel.QueueDeclare("ticket.generated", durable: true, exclusive: false, autoDelete: false, arguments: args);
+                _channel.QueueDeclare("reservation.created", durable: true, exclusive: false, autoDelete: false, arguments: args);
 
-                _logger.LogInformation("TicketGeneratedConsumer inicializado");
+                _logger.LogInformation("ReservationCreatedConsumer inicializado");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao inicializar TicketGeneratedConsumer");
+                _logger.LogError(ex, "Erro ao inicializar ReservationCreatedConsumer");
                 throw;
             }
         }
@@ -77,13 +81,13 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
 
             var consumer = new EventingBasicConsumer(_channel);
 
-            consumer.Received += (model, ea) =>
+            consumer.Received += async (model, ea) =>
             {
                 try
                 {
                     var body = ea.Body.ToArray();
                     var message = Encoding.UTF8.GetString(body);
-                    var eventObj = JsonSerializer.Deserialize<TicketGeneratedEvent>(message, _jsonOptions);
+                    var eventObj = JsonSerializer.Deserialize<ReservationCreatedEvent>(message, _jsonOptions);
 
                     if (eventObj == null)
                     {
@@ -92,21 +96,33 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
                         return;
                     }
 
-                    _logger.LogInformation("Bilhete gerado: {TicketCode} - {PassengerName} - {TripOrigin} -> {TripDestination}",
-                    eventObj.TicketCode, eventObj.PassengerName, eventObj.TripOrigin, eventObj.TripDestination);
+                    _logger.LogInformation("Processando reserva criada: {ReservationId} - {PassengerName}",
+                    eventObj.ReservationId, eventObj.PassengerName);
+
+                    await ProcessReservationCreatedAsync(eventObj, stoppingToken);
 
                     _channel.BasicAck(ea.DeliveryTag, false);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Erro ao processar ticket gerado");
+                    _logger.LogError(ex, "Erro ao processar reserva criada");
                     _channel.BasicNack(ea.DeliveryTag, false, true);
                 }
             };
 
-            _channel.BasicConsume("ticket.generated", false, consumer);
+            _channel.BasicConsume("reservation.created", false, consumer);
 
             return Task.CompletedTask;
+        }
+
+        private async Task ProcessReservationCreatedAsync(ReservationCreatedEvent eventObj, CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("Reserva {ReservationId} criada para {PassengerName} - Assentos: {Seats}",
+            eventObj.ReservationId, eventObj.PassengerName, string.Join(", ", eventObj.SeatNumbers));
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+
+            _logger.LogInformation("Reserva {ReservationId} processada com sucesso", eventObj.ReservationId);
         }
 
         public override void Dispose()

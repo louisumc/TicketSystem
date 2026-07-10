@@ -58,7 +58,12 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
                 _connection = factory.CreateConnection();
                 _channel = _connection.CreateModel();
 
-                _channel.QueueDeclare("payment.failed", durable: true, exclusive: false, autoDelete: false);
+                var args = new Dictionary<string, object>
+{
+{ "x-dead-letter-exchange", "ticket.events.dlx" },
+{ "x-dead-letter-routing-key", "payment.failed.dlq" }
+};
+                _channel.QueueDeclare("payment.failed", durable: true, exclusive: false, autoDelete: false, arguments: args);
 
                 _logger.LogInformation("PaymentFailedConsumer inicializado");
             }
@@ -134,14 +139,22 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
         {
             if (_channel != null)
             {
-                _channel.Close();
-                _channel.Dispose();
+                try
+                {
+                    _channel.Close();
+                    _channel.Dispose();
+                }
+                catch { }
             }
 
             if (_connection != null)
             {
-                _connection.Close();
-                _connection.Dispose();
+                try
+                {
+                    _connection.Close();
+                    _connection.Dispose();
+                }
+                catch { }
             }
 
             base.Dispose();

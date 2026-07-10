@@ -499,5 +499,34 @@ namespace TicketSystem.Infrastructure.Services
 
             return dto;
         }
+
+        public async Task<IEnumerable<ExpiredReservationDto>> GetExpiredReservationsAsync(CancellationToken cancellationToken = default)
+        {
+            var now = DateTime.UtcNow;
+
+            var expiredReservations = await _context.Reservations
+            .Include(r => r.Passenger)
+            .Include(r => r.ReservationSeats)
+            .ThenInclude(rs => rs.Seat)
+            .Where(r => r.Status == ReservationStatus.Pending &&
+            r.ExpiresAt < now &&
+            r.IsActive)
+            .ToListAsync(cancellationToken);
+
+            return expiredReservations.Select(r => new ExpiredReservationDto
+            {
+                Id = r.Id,
+                TripId = r.TripId,
+                PassengerId = r.PassengerId,
+                PassengerName = r.Passenger?.Name ?? string.Empty,
+                PassengerEmail = r.Passenger?.Email ?? string.Empty,
+                ExpiresAt = r.ExpiresAt,
+                Seats = r.ReservationSeats.Select(rs => new ExpiredSeatInfo
+                {
+                    SeatId = rs.SeatId,
+                    SeatNumber = rs.Seat?.Number ?? string.Empty
+                }).ToList()
+            });
+        }
     }
 }

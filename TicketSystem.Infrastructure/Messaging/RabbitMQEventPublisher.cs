@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using System.Text;
 using System.Text.Json;
 using TicketSystem.Application.Events;
@@ -67,38 +66,60 @@ namespace TicketSystem.Infrastructure.Messaging
 
         private void InitializeExchangesAndQueues()
         {
-            _channel.ExchangeDeclare("ticket.events", ExchangeType.Topic, durable: true);
-            _channel.ExchangeDeclare("ticket.events.dlx", ExchangeType.Topic, durable: true);
-
-            var queues = new[]
+            try
             {
-("reservation.created", "reservation.created"),
-("reservation.confirmed", "reservation.confirmed"),
-("payment.failed", "payment.failed"),
-("ticket.generated", "ticket.generated")
+                _channel.ExchangeDeclare("ticket.events", ExchangeType.Topic, durable: true);
+                _channel.ExchangeDeclare("ticket.events.dlx", ExchangeType.Topic, durable: true);
+                _logger.LogInformation("Exchanges declaradas: ticket.events, ticket.events.dlx");
+
+                var queues = new[]
+                {
+"reservation.created",
+"reservation.confirmed",
+"payment.failed",
+"ticket.generated"
 };
 
-            foreach (var (queue, routingKey) in queues)
-            {
-                // Remover fila existente se tiver argumentos diferentes
-                try
+                foreach (var queue in queues)
                 {
-                    _channel.QueueDelete(queue);
-                }
-                catch { }
-
-                var args = new Dictionary<string, object>
+                    try
+                    {
+                        var args = new Dictionary<string, object>
 {
 { "x-dead-letter-exchange", "ticket.events.dlx" },
-{ "x-dead-letter-routing-key", routingKey + ".dlq" }
+{ "x-dead-letter-routing-key", queue + ".dlq" }
 };
 
-                _channel.QueueDeclare(queue, durable: true, exclusive: false, autoDelete: false, arguments: args);
-                _channel.QueueBind(queue, "ticket.events", routingKey);
+                        _channel.QueueDeclare(queue, durable: true, exclusive: false, autoDelete: false, arguments: args);
+                        _logger.LogInformation("Fila declarada: {Queue}", queue);
 
-                var dlqName = queue + ".dlq";
-                _channel.QueueDeclare(dlqName, durable: true, exclusive: false, autoDelete: false, arguments: null);
-                _channel.QueueBind(dlqName, "ticket.events.dlx", routingKey + ".dlq");
+                        _channel.QueueBind(queue, "ticket.events", queue);
+                        _logger.LogInformation("Binding criado: ticket.events -> {Queue} (routing key: {Queue})", queue, queue);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Erro ao configurar fila {Queue}", queue);
+                    }
+
+                    var dlqName = queue + ".dlq";
+                    try
+                    {
+                        _channel.QueueDeclare(dlqName, durable: true, exclusive: false, autoDelete: false, arguments: null);
+                        _channel.QueueBind(dlqName, "ticket.events.dlx", queue + ".dlq");
+                        _logger.LogInformation("DLQ declarada: {DLQ}", dlqName);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Erro ao declarar DLQ {DLQ}", dlqName);
+                    }
+                }
+
+                _logger.LogInformation("Todas as filas e bindings configurados com sucesso");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao inicializar exchanges e filas");
+                throw;
             }
         }
 
@@ -116,6 +137,8 @@ namespace TicketSystem.Infrastructure.Messaging
                 var routingKey = GetRoutingKey(eventName);
                 var json = JsonSerializer.Serialize(@event, _jsonOptions);
                 var body = Encoding.UTF8.GetBytes(json);
+
+                _logger.LogInformation("Publicando evento: {EventType} | RoutingKey: {RoutingKey}", eventName, routingKey);
 
                 var properties = _channel.CreateBasicProperties();
                 properties.Persistent = true;
@@ -189,14 +212,22 @@ namespace TicketSystem.Infrastructure.Messaging
         {
             if (_channel != null)
             {
-                _channel.Close();
-                _channel.Dispose();
+                try
+                {
+                    _channel.Close();
+                    _channel.Dispose();
+                }
+                catch { }
             }
 
             if (_connection != null)
             {
-                _connection.Close();
-                _connection.Dispose();
+                try
+                {
+                    _connection.Close();
+                    _connection.Dispose();
+                }
+                catch { }
             }
         }
     }

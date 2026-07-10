@@ -2,6 +2,8 @@
 using FluentValidation.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using RabbitMQ.Client;
+using Scrutor;
 using Serilog;
 using StackExchange.Redis;
 using TicketSystem.Api.Middleware;
@@ -20,7 +22,7 @@ using TicketSystem.Infrastructure.Messaging;
 using TicketSystem.Infrastructure.Messaging.Consumers;
 using TicketSystem.Infrastructure.Repositories;
 using TicketSystem.Infrastructure.Services;
-using Scrutor;
+using TicketSystem.Infrastructure.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,6 +68,19 @@ else
 var rabbitMQEnabled = builder.Configuration.GetValue<bool>("RabbitMQ:Enabled", false);
 if (rabbitMQEnabled)
 {
+    var factory = new ConnectionFactory
+    {
+        HostName = builder.Configuration.GetValue<string>("RabbitMQ:HostName", "localhost"),
+        Port = builder.Configuration.GetValue<int>("RabbitMQ:Port", 5672),
+        UserName = builder.Configuration.GetValue<string>("RabbitMQ:UserName", "guest"),
+        Password = builder.Configuration.GetValue<string>("RabbitMQ:Password", "guest"),
+        VirtualHost = builder.Configuration.GetValue<string>("RabbitMQ:VirtualHost", "/"),
+        AutomaticRecoveryEnabled = true,
+        NetworkRecoveryInterval = TimeSpan.FromSeconds(10)
+    };
+
+    var connection = factory.CreateConnection();
+    builder.Services.AddSingleton<IConnection>(connection);
     builder.Services.AddSingleton<IEventPublisher, RabbitMQEventPublisher>();
 }
 else
@@ -112,10 +127,20 @@ builder.Services.Decorate<IReservationService, CacheReservationService>();
 // Registra consumers como hosted services
 if (rabbitMQEnabled)
 {
+    builder.Services.AddHostedService<ReservationCreatedConsumer>();
     builder.Services.AddHostedService<ReservationConfirmedConsumer>();
     builder.Services.AddHostedService<PaymentFailedConsumer>();
     builder.Services.AddHostedService<TicketGeneratedConsumer>();
 }
+
+// Workers
+builder.Services.AddHostedService<ReservationExpirationWorker>();
+builder.Services.AddHostedService<TicketGenerationWorker>();
+builder.Services.AddHostedService<EmailNotificationWorker>();
+builder.Services.AddHostedService<PaymentRetryWorker>();
+
+// Email Service
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 builder.Services.AddLogging();
 
@@ -177,3 +202,4 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
