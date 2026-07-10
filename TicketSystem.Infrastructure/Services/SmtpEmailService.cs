@@ -69,11 +69,16 @@ namespace TicketSystem.Infrastructure.Services
                 {
                     var attachment = new Attachment(attachmentPath);
                     message.Attachments.Add(attachment);
+                    _logger.LogInformation("Anexo adicionado: {AttachmentPath}", attachmentPath);
+                }
+                else
+                {
+                    _logger.LogWarning("Arquivo de anexo nao encontrado: {AttachmentPath}", attachmentPath);
                 }
 
+                _logger.LogInformation("Enviando email para: {To}", to);
                 await _smtpClient.SendMailAsync(message, cancellationToken);
-
-                _logger.LogInformation("Email enviado para: {To}", to);
+                _logger.LogInformation("Email enviado com sucesso para: {To}", to);
             }
             catch (Exception ex)
             {

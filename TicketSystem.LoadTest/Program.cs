@@ -19,14 +19,14 @@ class Program
     static async Task Main(string[] args)
     {
         Console.WriteLine("========================================");
-        Console.WriteLine("   TESTE DE CONCORRENCIA - RESERVAS");
+        Console.WriteLine(" TESTE DE CONCORRENCIA - RESERVAS");
         Console.WriteLine("========================================");
         Console.WriteLine();
 
         Console.WriteLine("ATENCAO: Durante o teste, pausas serao feitas para:");
-        Console.WriteLine("   - Verificar filas no RabbitMQ (http://localhost:15672)");
-        Console.WriteLine("   - Verificar cache no Redis (redis-cli)");
-        Console.WriteLine("   - Verificar dados no SQL Server");
+        Console.WriteLine(" - Verificar filas no RabbitMQ (http://localhost:15672)");
+        Console.WriteLine(" - Verificar cache no Redis (redis-cli)");
+        Console.WriteLine(" - Verificar dados no SQL Server");
         Console.WriteLine();
         Console.WriteLine("Pressione ENTER para continuar...");
         Console.ReadLine();
@@ -88,24 +88,24 @@ class Program
         }
 
         Console.WriteLine("Viagem encontrada (aleatoria): " + trip.Id);
-        Console.WriteLine("   Origem: " + trip.Origin);
-        Console.WriteLine("   Destino: " + trip.Destination);
-        Console.WriteLine("   Assentos disponiveis: " + trip.AvailableSeats);
-        Console.WriteLine("   Assentos para teste: " + string.Join(", ", availableSeats));
+        Console.WriteLine(" Origem: " + trip.Origin);
+        Console.WriteLine(" Destino: " + trip.Destination);
+        Console.WriteLine(" Assentos disponiveis: " + trip.AvailableSeats);
+        Console.WriteLine(" Assentos para teste: " + string.Join(", ", availableSeats));
 
         Console.WriteLine();
         Console.WriteLine("PAUSA: Verifique as filas no RabbitMQ antes de comecar:");
-        Console.WriteLine("   http://localhost:15672");
-        Console.WriteLine("   Usuario: guest / Senha: guest");
-        Console.WriteLine("   Filas: reservation.created, reservation.confirmed, payment.failed, ticket.generated");
+        Console.WriteLine(" http://localhost:15672");
+        Console.WriteLine(" Usuario: guest / Senha: guest");
+        Console.WriteLine(" Filas: reservation.created, reservation.confirmed, payment.failed, ticket.generated");
         Console.WriteLine();
         Console.WriteLine("Pressione ENTER quando estiver pronto para continuar...");
         Console.ReadLine();
 
         Console.WriteLine();
         Console.WriteLine("========================================");
-        Console.WriteLine("   TESTE 1: MESMO ASSENTO");
-        Console.WriteLine("   10 usuarios tentando reservar o assento " + availableSeats[0]);
+        Console.WriteLine(" TESTE 1: MESMO ASSENTO");
+        Console.WriteLine(" 10 usuarios tentando reservar o assento " + availableSeats[0]);
         Console.WriteLine("========================================");
         Console.WriteLine();
 
@@ -113,8 +113,8 @@ class Program
 
         Console.WriteLine();
         Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 1:");
-        Console.WriteLine("   Fila: reservation.created - deve ter 1 mensagem");
-        Console.WriteLine("   Fila: reservation.confirmed - deve estar vazia (consumidor processou)");
+        Console.WriteLine(" Fila: reservation.created - deve ter 1 mensagem");
+        Console.WriteLine(" Fila: reservation.confirmed - deve estar vazia (consumidor processou)");
         Console.WriteLine();
         Console.WriteLine("Pressione ENTER para continuar...");
         Console.ReadLine();
@@ -126,18 +126,35 @@ class Program
 
         if (tripAfterTest1 == null || tripAfterTest1.AvailableSeats < 3)
         {
-            Console.WriteLine("ERRO: Poucos assentos disponiveis para continuar!");
-            Console.WriteLine("Pressione qualquer tecla para sair...");
-            Console.ReadKey();
-            return;
+            Console.WriteLine("AVISO: Poucos assentos disponiveis na viagem atual. Buscando outra viagem...");
+            var otherTrip = tripsAfterTest1.FirstOrDefault(t => t.AvailableSeats >= 3);
+            if (otherTrip != null)
+            {
+                trip = otherTrip;
+                Console.WriteLine("Nova viagem encontrada: " + trip.Id);
+                Console.WriteLine(" Origem: " + trip.Origin);
+                Console.WriteLine(" Destino: " + trip.Destination);
+                Console.WriteLine(" Assentos disponiveis: " + trip.AvailableSeats);
+            }
+            else
+            {
+                Console.WriteLine("ERRO: Nenhuma viagem com assentos disponiveis para continuar!");
+                Console.WriteLine("Pressione qualquer tecla para sair...");
+                Console.ReadKey();
+                return;
+            }
+        }
+        else
+        {
+            trip = tripAfterTest1;
         }
 
-        var seatsForTest2 = tripAfterTest1.SeatNumbers.Take(4).ToList();
+        var seatsForTest2 = trip.SeatNumbers.Take(4).ToList();
 
         Console.WriteLine();
         Console.WriteLine("========================================");
-        Console.WriteLine("   TESTE 2: ASSENTOS DIFERENTES");
-        Console.WriteLine("   4 usuarios diferentes reservando 4 assentos diferentes");
+        Console.WriteLine(" TESTE 2: ASSENTOS DIFERENTES");
+        Console.WriteLine(" 4 usuarios diferentes reservando 4 assentos diferentes");
         Console.WriteLine("========================================");
         Console.WriteLine();
 
@@ -145,8 +162,8 @@ class Program
 
         Console.WriteLine();
         Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 2:");
-        Console.WriteLine("   Fila: reservation.created - deve ter +4 mensagens");
-        Console.WriteLine("   Fila: reservation.confirmed - deve estar vazia");
+        Console.WriteLine(" Fila: reservation.created - deve ter +4 mensagens");
+        Console.WriteLine(" Fila: reservation.confirmed - deve estar vazia");
         Console.WriteLine();
         Console.WriteLine("Pressione ENTER para continuar...");
         Console.ReadLine();
@@ -158,50 +175,146 @@ class Program
 
         if (tripAfterTest2 == null || tripAfterTest2.AvailableSeats == 0)
         {
-            Console.WriteLine("ERRO: Nenhum assento disponivel para o Teste 3!");
-            Console.WriteLine("Pressione qualquer tecla para sair...");
-            Console.ReadKey();
-            return;
-        }
+            Console.WriteLine("AVISO: Nenhum assento disponivel na viagem atual para o Teste 3!");
+            Console.WriteLine("Buscando outra viagem com assentos disponiveis...");
 
-        var seatForTest3 = tripAfterTest2.SeatNumbers.FirstOrDefault();
-        if (string.IsNullOrEmpty(seatForTest3))
+            var otherTrip = tripsAfterTest2.FirstOrDefault(t => t.AvailableSeats > 0);
+            if (otherTrip != null)
+            {
+                trip = otherTrip;
+                Console.WriteLine("Nova viagem encontrada: " + trip.Id);
+                Console.WriteLine(" Origem: " + trip.Origin);
+                Console.WriteLine(" Destino: " + trip.Destination);
+                Console.WriteLine(" Assentos disponiveis: " + trip.AvailableSeats);
+            }
+            else
+            {
+                Console.WriteLine("AVISO: Nenhuma viagem com assentos disponiveis.");
+                Console.WriteLine("Pulando Teste 3 e indo para a etapa de pagamento...");
+            }
+        }
+        else
         {
-            Console.WriteLine("ERRO: Nenhum assento disponivel para o Teste 3!");
-            Console.WriteLine("Pressione qualquer tecla para sair...");
-            Console.ReadKey();
-            return;
+            trip = tripAfterTest2;
         }
 
-        Console.WriteLine();
-        Console.WriteLine("========================================");
-        Console.WriteLine("   TESTE 3: CONFIRMACAO CONCORRENTE");
-        Console.WriteLine("   5 usuarios tentando confirmar a mesma reserva");
-        Console.WriteLine("   Assento disponivel: " + seatForTest3);
-        Console.WriteLine("========================================");
-        Console.WriteLine();
+        if (trip != null && trip.AvailableSeats > 0)
+        {
+            var seatForTest3 = trip.SeatNumbers.FirstOrDefault();
+            if (!string.IsNullOrEmpty(seatForTest3))
+            {
+                Console.WriteLine();
+                Console.WriteLine("========================================");
+                Console.WriteLine(" TESTE 3: CONFIRMACAO CONCORRENTE");
+                Console.WriteLine(" 5 usuarios tentando confirmar a mesma reserva");
+                Console.WriteLine(" Assento disponivel: " + seatForTest3);
+                Console.WriteLine("========================================");
+                Console.WriteLine();
 
-        await TestConcurrentConfirmations(trip.Id, new List<string> { seatForTest3 });
+                await TestConcurrentConfirmations(trip.Id, new List<string> { seatForTest3 });
+            }
+        }
 
         Console.WriteLine();
         Console.WriteLine("PAUSA: Verifique as filas do RabbitMQ apos o Teste 3:");
-        Console.WriteLine("   Fila: reservation.confirmed - deve ter 1 mensagem (apos pagamento)");
-        Console.WriteLine("   Fila: ticket.generated - deve ter 1 mensagem (bilhete gerado)");
+        Console.WriteLine(" Fila: reservation.confirmed - deve ter 1 mensagem (apos pagamento)");
+        Console.WriteLine(" Fila: ticket.generated - deve ter 1 mensagem (bilhete gerado)");
         Console.WriteLine();
-        Console.WriteLine("Pressione ENTER para finalizar...");
+        Console.WriteLine("Pressione ENTER para continuar...");
         Console.ReadLine();
 
         Console.WriteLine();
         Console.WriteLine("========================================");
-        Console.WriteLine("   TESTES FINALIZADOS");
+        Console.WriteLine(" PAGAMENTO E FLUXO COMPLETO");
         Console.WriteLine("========================================");
         Console.WriteLine();
-        Console.WriteLine("Resumo:");
-        Console.WriteLine("   - Teste 1: 10 usuarios, 1 reserva (concorrencia)");
-        Console.WriteLine("   - Teste 2: 4 usuarios, 4 reservas (assentos diferentes)");
-        Console.WriteLine("   - Teste 3: 5 usuarios, 1 confirmacao (concorrencia)");
+
+        Console.WriteLine("Deseja simular o pagamento para uma das reservas criadas?");
+        Console.WriteLine(" [S] Sim - Processar pagamento e gerar bilhete");
+        Console.WriteLine(" [N] Nao - Finalizar sem pagamento");
+        Console.Write("Escolha uma opcao (S/N): ");
+
+        var option = Console.ReadLine()?.ToUpper();
+
+        if (option == "S")
+        {
+            Console.WriteLine();
+            Console.WriteLine("Buscando reservas pendentes...");
+
+            try
+            {
+                var reservationsResponse = await _httpClient.GetAsync("/api/reservations");
+                if (reservationsResponse.IsSuccessStatusCode)
+                {
+                    var result = await reservationsResponse.Content.ReadFromJsonAsync<ApiResponse<List<ReservationDto>>>();
+
+                    var allReservations = result?.Data?.ToList() ?? new List<ReservationDto>();
+                    var pendingReservations = allReservations.Where(r => r.Status == 0).ToList();
+
+                    if (pendingReservations.Count == 0 && allReservations.Count > 0)
+                    {
+                        Console.WriteLine("Nenhuma reserva pendente encontrada. Todas as reservas ja foram processadas.");
+                        Console.WriteLine("Reservas existentes: " + allReservations.Count);
+                    }
+                    else if (pendingReservations.Count == 0)
+                    {
+                        Console.WriteLine("Nenhuma reserva pendente encontrada.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Reservas pendentes encontradas: " + pendingReservations.Count);
+
+                        for (int i = 0; i < pendingReservations.Count && i < 3; i++)
+                        {
+                            var reservation = pendingReservations[i];
+                            Console.WriteLine();
+                            Console.WriteLine("Processando pagamento para reserva: " + reservation.Id);
+                            Console.WriteLine(" Passageiro: " + reservation.PassengerName);
+                            Console.WriteLine(" Total: R$ " + reservation.TotalAmount);
+
+                            var payRequest = new { paymentMethod = "Cartao de Credito" };
+                            var payContent = new StringContent(
+                            JsonSerializer.Serialize(payRequest, _jsonOptions),
+                            Encoding.UTF8,
+                            "application/json");
+
+                            var payResponse = await _httpClient.PostAsync("/api/payment/reservations/" + reservation.Id + "/pay", payContent);
+
+                            if (payResponse.IsSuccessStatusCode)
+                            {
+                                Console.WriteLine(" Pagamento aprovado!");
+                                Console.WriteLine(" Email enviado para: " + reservation.PassengerEmail);
+                                Console.WriteLine(" Bilhete gerado com sucesso");
+                            }
+                            else
+                            {
+                                var error = await payResponse.Content.ReadAsStringAsync();
+                                Console.WriteLine(" Pagamento recusado: " + error);
+                            }
+
+                            await Task.Delay(1000);
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Erro ao buscar reservas: " + reservationsResponse.StatusCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Erro ao processar pagamentos: " + ex.Message);
+            }
+        }
+        else
+        {
+            Console.WriteLine("Pagamento nao processado. Os bilhetes nao serao gerados.");
+        }
+
         Console.WriteLine();
-        Console.WriteLine("Verifique as filas do RabbitMQ para ver os eventos processados.");
+        Console.WriteLine("========================================");
+        Console.WriteLine(" TESTES FINALIZADOS");
+        Console.WriteLine("========================================");
         Console.WriteLine();
         Console.WriteLine("Pressione qualquer tecla para sair...");
         Console.ReadKey();
@@ -213,7 +326,7 @@ class Program
         {
             try
             {
-                Console.Write("   Tentativa " + attempt + "/" + MAX_RETRY_ATTEMPTS + "... ");
+                Console.Write(" Tentativa " + attempt + "/" + MAX_RETRY_ATTEMPTS + "... ");
                 var response = await _httpClient.GetAsync("/api/buses");
 
                 if (response.IsSuccessStatusCode)
@@ -260,15 +373,15 @@ class Program
                 if (result != null && result.Data != null)
                 {
                     Console.WriteLine("Redis:");
-                    Console.WriteLine("   Habilitado: " + result.Data.RedisEnabled);
-                    Console.WriteLine("   Conectado: " + result.Data.RedisConnected);
+                    Console.WriteLine(" Habilitado: " + result.Data.RedisEnabled);
+                    Console.WriteLine(" Conectado: " + result.Data.RedisConnected);
                     if (result.Data.RedisConnected)
                     {
-                        Console.WriteLine("   Status: OK");
+                        Console.WriteLine(" Status: OK");
                     }
                     else
                     {
-                        Console.WriteLine("   Status: OFFLINE");
+                        Console.WriteLine(" Status: OFFLINE");
                     }
                 }
             }
@@ -324,9 +437,9 @@ class Program
                     if (seatsResult != null && seatsResult.Data != null)
                     {
                         var availableSeats = seatsResult.Data
-                            .Where(s => s.Status == 0)
-                            .Select(s => s.Number)
-                            .ToList();
+                        .Where(s => s.Status == 0)
+                        .Select(s => s.Number)
+                        .ToList();
 
                         if (availableSeats.Count > 0)
                         {
@@ -369,9 +482,9 @@ class Program
         var document = GenerateUniqueDocument();
 
         return (
-            Name: "Usuario_" + userId + "_" + uniqueId,
-            Document: document,
-            Email: "usuario" + userId + "_" + uniqueId + "@email.com"
+        Name: "Usuario_" + userId + "" + uniqueId,
+        Document: document,
+        Email: "usuario" + userId + "" + uniqueId + "@email.com"
         );
     }
 
@@ -406,9 +519,9 @@ class Program
                     };
 
                     var content = new StringContent(
-                        JsonSerializer.Serialize(request, _jsonOptions),
-                        Encoding.UTF8,
-                        "application/json");
+                    JsonSerializer.Serialize(request, _jsonOptions),
+                    Encoding.UTF8,
+                    "application/json");
 
                     var response = await _httpClient.PostAsync("/api/reservations", content);
                     var responseBody = await response.Content.ReadAsStringAsync();
@@ -443,7 +556,7 @@ class Program
                 if (!string.IsNullOrEmpty(result.ErrorDetail))
                 {
                     var error = result.ErrorDetail.Length > 200 ? result.ErrorDetail.Substring(0, 200) + "..." : result.ErrorDetail;
-                    Console.WriteLine("   Detalhe: " + error);
+                    Console.WriteLine(" Detalhe: " + error);
                 }
             }
         }
@@ -489,9 +602,9 @@ class Program
                     };
 
                     var content = new StringContent(
-                        JsonSerializer.Serialize(request, _jsonOptions),
-                        Encoding.UTF8,
-                        "application/json");
+                    JsonSerializer.Serialize(request, _jsonOptions),
+                    Encoding.UTF8,
+                    "application/json");
 
                     var response = await _httpClient.PostAsync("/api/reservations", content);
                     var responseBody = await response.Content.ReadAsStringAsync();
@@ -526,7 +639,7 @@ class Program
                 if (!string.IsNullOrEmpty(result.ErrorDetail))
                 {
                     var error = result.ErrorDetail.Length > 200 ? result.ErrorDetail.Substring(0, 200) + "..." : result.ErrorDetail;
-                    Console.WriteLine("   Detalhe: " + error);
+                    Console.WriteLine(" Detalhe: " + error);
                 }
             }
         }
@@ -584,9 +697,9 @@ class Program
                     };
 
                     var content = new StringContent(
-                        JsonSerializer.Serialize(request, _jsonOptions),
-                        Encoding.UTF8,
-                        "application/json");
+                    JsonSerializer.Serialize(request, _jsonOptions),
+                    Encoding.UTF8,
+                    "application/json");
 
                     var response = await _httpClient.PutAsync("/api/reservations/" + reservationId + "/confirm", content);
                     var responseBody = await response.Content.ReadAsStringAsync();
@@ -621,7 +734,7 @@ class Program
                 if (!string.IsNullOrEmpty(result.ErrorDetail))
                 {
                     var error = result.ErrorDetail.Length > 200 ? result.ErrorDetail.Substring(0, 200) + "..." : result.ErrorDetail;
-                    Console.WriteLine("   Detalhe: " + error);
+                    Console.WriteLine(" Detalhe: " + error);
                 }
             }
         }
@@ -652,9 +765,9 @@ class Program
             };
 
             var content = new StringContent(
-                JsonSerializer.Serialize(request, _jsonOptions),
-                Encoding.UTF8,
-                "application/json");
+            JsonSerializer.Serialize(request, _jsonOptions),
+            Encoding.UTF8,
+            "application/json");
 
             var response = await _httpClient.PostAsync("/api/reservations", content);
             var responseBody = await response.Content.ReadAsStringAsync();
@@ -728,5 +841,14 @@ class Program
         public string SeatNumber { get; set; } = string.Empty;
         public List<string> SeatNumbers { get; set; } = new List<string>();
         public int AvailableSeats { get; set; }
+    }
+
+    public class ReservationDto
+    {
+        public Guid Id { get; set; }
+        public int Status { get; set; }
+        public string PassengerName { get; set; } = string.Empty;
+        public string PassengerEmail { get; set; } = string.Empty;
+        public decimal TotalAmount { get; set; }
     }
 }

@@ -1,0 +1,17 @@
+=== BILHETE DE VIAGEM ===
+
+Ticket: TKT-260710-3987-bccef3
+Passageiro: Usuario_103f37579a7
+Documento: 59809835687
+
+Viagem: Sao Paulo -> Curitiba
+Data: 11/07/2026 19:26:43
+
+Assentos:
+ - 2B (Aisle) - R 84,00
+
+Total: R 84,00
+
+==========================
+Este bilhete e eletronico.
+Apresente no embarque.

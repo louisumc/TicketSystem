@@ -16,6 +16,13 @@ namespace TicketSystem.Api.Controllers
             _reservationService = reservationService;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            var reservations = await _reservationService.GetAllReservationsAsync();
+            return Ok(new ApiResponse<IEnumerable<ReservationDto>>(reservations, "Reservas listadas com sucesso"));
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateReservationDto createDto)
         {
@@ -50,7 +57,7 @@ namespace TicketSystem.Api.Controllers
         public async Task<IActionResult> GetAvailableSeats(Guid tripId)
         {
             var availableSeats = await _reservationService.GetAvailableSeatsAsync(tripId);
-            return Ok(new ApiResponse<AvailableSeatsDto>(availableSeats, "Assentos disponíveis listados com sucesso"));
+            return Ok(new ApiResponse<AvailableSeatsDto>(availableSeats, "Assentos disponiveis listados com sucesso"));
         }
 
         [HttpGet("trip/{tripId}")]

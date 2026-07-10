@@ -97,7 +97,7 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
                         return;
                     }
 
-                    _logger.LogInformation("Processando evento de confirmacao de reserva: {ReservationId}", eventObj.ReservationId);
+                    _logger.LogInformation("Processando confirmacao de reserva: {ReservationId}", eventObj.ReservationId);
 
                     await ProcessReservationConfirmedAsync(eventObj, stoppingToken);
 
@@ -105,7 +105,7 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Erro ao processar evento de confirmacao de reserva");
+                    _logger.LogError(ex, "Erro ao processar confirmacao de reserva");
                     _channel.BasicNack(ea.DeliveryTag, false, true);
                 }
             };
@@ -117,8 +117,35 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
 
         private async Task ProcessReservationConfirmedAsync(ReservationConfirmedEvent eventObj, CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Gerando bilhete para reserva: {ReservationId}", eventObj.ReservationId);
+
             var ticketCode = GenerateTicketCode(eventObj);
             var qrCode = GenerateQrCode(ticketCode);
+
+            var basePath = Directory.GetCurrentDirectory();
+            var ticketsPath = Path.Combine(basePath, "wwwroot", "tickets");
+
+            if (!Directory.Exists(ticketsPath))
+            {
+                Directory.CreateDirectory(ticketsPath);
+                _logger.LogInformation("Diretorio criado: {TicketsPath}", ticketsPath);
+            }
+
+            var ticketPath = Path.Combine(ticketsPath, ticketCode + ".txt");
+            var ticketContent = GenerateTicketContent(eventObj, ticketCode, qrCode);
+
+            await File.WriteAllTextAsync(ticketPath, ticketContent, cancellationToken);
+
+            if (File.Exists(ticketPath))
+            {
+                _logger.LogInformation("Bilhete TXT criado: {TicketPath}", ticketPath);
+            }
+            else
+            {
+                _logger.LogWarning("Falha ao criar bilhete TXT: {TicketPath}", ticketPath);
+            }
+
+            _logger.LogInformation("Bilhete gerado: {TicketCode} - {TicketPath}", ticketCode, ticketPath);
 
             using var scope = _serviceProvider.CreateScope();
             var eventPublisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
@@ -147,8 +174,7 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
 
             await eventPublisher.PublishAsync(ticketEvent, cancellationToken);
 
-            _logger.LogInformation("Bilhete gerado para reserva: {ReservationId} | TicketCode: {TicketCode}",
-            eventObj.ReservationId, ticketCode);
+            _logger.LogInformation("TicketGeneratedEvent publicado para reserva: {ReservationId}", eventObj.ReservationId);
         }
 
         private string GenerateTicketCode(ReservationConfirmedEvent eventObj)
@@ -164,6 +190,30 @@ namespace TicketSystem.Infrastructure.Messaging.Consumers
         private string GenerateQrCode(string ticketCode)
         {
             return "QR-" + ticketCode + "-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        }
+
+        private string GenerateTicketContent(ReservationConfirmedEvent eventObj, string ticketCode, string qrCode)
+        {
+            return @"
+=== BILHETE DE VIAGEM ===
+
+Ticket: " + ticketCode + @"
+QR Code: " + qrCode + @"
+Passageiro: " + eventObj.PassengerName + @"
+Documento: " + eventObj.PassengerDocument + @"
+
+Viagem: " + eventObj.TripOrigin + " -> " + eventObj.TripDestination + @"
+Data: " + eventObj.TripDepartureTime + @"
+
+Assentos:
+" + string.Join("\n", eventObj.Seats.Select(s => " - " + s.Number + " (" + s.Type + ") - R$ " + s.Price.ToString("F2"))) + @"
+
+Total: R$ " + eventObj.TotalAmount.ToString("F2") + @"
+
+==========================
+Este bilhete e eletronico.
+Apresente no embarque.
+";
         }
 
         public override void Dispose()

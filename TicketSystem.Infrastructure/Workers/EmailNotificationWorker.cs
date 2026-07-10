@@ -13,12 +13,12 @@ namespace TicketSystem.Infrastructure.Workers
 {
     public class EmailNotificationWorker : BackgroundService
     {
-        private readonly IConnection _connection;
-        private readonly IModel _channel;
         private readonly ILogger<EmailNotificationWorker> _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly bool _isEnabled;
         private readonly JsonSerializerOptions _jsonOptions;
+        private readonly IModel _channel;
+        private readonly IConnection _connection;
 
         public EmailNotificationWorker(
         IConfiguration configuration,
@@ -45,15 +45,26 @@ namespace TicketSystem.Infrastructure.Workers
             _connection = connection;
             _channel = _connection.CreateModel();
 
-            _logger.LogInformation("EmailNotificationWorker inicializado");
+            _channel.BasicQos(0, 10, false);
+
+            var args = new Dictionary<string, object>
+{
+{ "x-dead-letter-exchange", "ticket.events.dlx" },
+{ "x-dead-letter-routing-key", "ticket.generated.dlq" }
+};
+            _channel.QueueDeclare("ticket.generated", durable: true, exclusive: false, autoDelete: false, arguments: args);
+
+            _logger.LogInformation("EmailNotificationWorker inicializado. Escutando fila: ticket.generated");
         }
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             if (!_isEnabled)
             {
-                return Task.CompletedTask;
+                return;
             }
+
+            _logger.LogInformation("EmailNotificationWorker iniciando consumo da fila ticket.generated...");
 
             var consumer = new EventingBasicConsumer(_channel);
 
@@ -61,8 +72,12 @@ namespace TicketSystem.Infrastructure.Workers
             {
                 try
                 {
+                    _logger.LogInformation("MENSAGEM RECEBIDA na fila ticket.generated!");
+
                     var body = ea.Body.ToArray();
                     var message = Encoding.UTF8.GetString(body);
+                    _logger.LogInformation("Conteudo da mensagem: {Message}", message);
+
                     var eventObj = JsonSerializer.Deserialize<TicketGeneratedEvent>(message, _jsonOptions);
 
                     if (eventObj == null)
@@ -78,6 +93,7 @@ namespace TicketSystem.Infrastructure.Workers
                     await SendEmailAsync(eventObj);
 
                     _channel.BasicAck(ea.DeliveryTag, false);
+                    _logger.LogInformation("Email processado com sucesso para: {Email}", eventObj.PassengerEmail);
                 }
                 catch (Exception ex)
                 {
@@ -87,8 +103,9 @@ namespace TicketSystem.Infrastructure.Workers
             };
 
             _channel.BasicConsume("ticket.generated", false, consumer);
+            _logger.LogInformation("EmailNotificationWorker escutando fila ticket.generated");
 
-            return Task.CompletedTask;
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
 
         private async Task SendEmailAsync(TicketGeneratedEvent eventObj)
@@ -102,11 +119,16 @@ namespace TicketSystem.Infrastructure.Workers
                 var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
                 var subject = "Seu bilhete de viagem - " + eventObj.TicketCode;
-                var body = $@"
 
-<h2>Ticket System - Bilhete de Viagem</h2> <p><strong>Passageiro:</strong> {eventObj.PassengerName}</p> <p><strong>Ticket:</strong> {eventObj.TicketCode}</p> <p><strong>Viagem:</strong> {eventObj.TripOrigin} → {eventObj.TripDestination}</p> <p><strong>Partida:</strong> {eventObj.TripDepartureTime}</p> <p><strong>Assentos:</strong> {string.Join(", ", eventObj.Seats.Select(s => s.Number))}</p> <p><strong>QR Code:</strong> {eventObj.QrCode}</p> <hr/> <p><em>Este e um bilhete eletronico. Apresente no embarque.</em></p> ";
+                var body = @"
 
-                var attachmentPath = Path.Combine("wwwroot", "tickets", eventObj.TicketCode + ".pdf");
+<h2>Ticket System - Bilhete de Viagem</h2> <p><strong>Passageiro:</strong> " + eventObj.PassengerName + @"</p> <p><strong>Ticket:</strong> " + eventObj.TicketCode + @"</p> <p><strong>QR Code:</strong> " + eventObj.QrCode + @"</p> <p><strong>Viagem:</strong> " + eventObj.TripOrigin + " -> " + eventObj.TripDestination + @"</p> <p><strong>Partida:</strong> " + eventObj.TripDepartureTime + @"</p> <p><strong>Assentos:</strong> " + string.Join(", ", eventObj.Seats.Select(s => s.Number)) + @"</p> <hr/> <p><em>Este e um bilhete eletronico. Apresente no embarque.</em></p> <p><em>O arquivo do bilhete esta em anexo.</em></p> ";
+
+                var basePath = Directory.GetCurrentDirectory();
+                var attachmentPath = Path.Combine(basePath, "wwwroot", "tickets", eventObj.TicketCode + ".txt");
+
+                _logger.LogInformation("Caminho do anexo: {AttachmentPath}", attachmentPath);
+                _logger.LogInformation("Arquivo existe? {Exists}", File.Exists(attachmentPath));
 
                 await emailService.SendTicketEmailAsync(
                 eventObj.PassengerEmail,
@@ -120,6 +142,7 @@ namespace TicketSystem.Infrastructure.Workers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Falha ao enviar email para {Email}", eventObj.PassengerEmail);
+                throw;
             }
         }
 

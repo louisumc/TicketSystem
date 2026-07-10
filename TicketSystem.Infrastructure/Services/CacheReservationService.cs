@@ -98,6 +98,11 @@ namespace TicketSystem.Infrastructure.Services
             return await _innerService.GetExpiredReservationsAsync(cancellationToken);
         }
 
+        public async Task<IEnumerable<ReservationDto>> GetAllReservationsAsync()
+        {
+            return await _innerService.GetAllReservationsAsync();
+        }
+
         public async Task<Reservation?> GetByIdAsync(Guid id)
         {
             return await _innerService.GetByIdAsync(id);

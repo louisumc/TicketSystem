@@ -45,7 +45,14 @@ namespace TicketSystem.Infrastructure.Workers
             _connection = connection;
             _channel = _connection.CreateModel();
 
-            _logger.LogInformation("TicketGenerationWorker inicializado");
+            var args = new Dictionary<string, object>
+{
+{ "x-dead-letter-exchange", "ticket.events.dlx" },
+{ "x-dead-letter-routing-key", "reservation.confirmed.dlq" }
+};
+            _channel.QueueDeclare("reservation.confirmed", durable: true, exclusive: false, autoDelete: false, arguments: args);
+
+            _logger.LogInformation("TicketGenerationWorker inicializado. Escutando fila: reservation.confirmed");
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -54,6 +61,8 @@ namespace TicketSystem.Infrastructure.Workers
             {
                 return Task.CompletedTask;
             }
+
+            _logger.LogInformation("TicketGenerationWorker iniciando consumo da fila reservation.confirmed...");
 
             var consumer = new EventingBasicConsumer(_channel);
 
@@ -86,6 +95,7 @@ namespace TicketSystem.Infrastructure.Workers
             };
 
             _channel.BasicConsume("reservation.confirmed", false, consumer);
+            _logger.LogInformation("TicketGenerationWorker escutando fila reservation.confirmed");
 
             return Task.CompletedTask;
         }
@@ -97,21 +107,44 @@ namespace TicketSystem.Infrastructure.Workers
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
 
             var ticketCode = GenerateTicketCode(eventObj);
-            var ticketUrl = "/tickets/" + ticketCode + ".pdf";
+            var ticketUrl = "/tickets/" + ticketCode + ".txt";
 
-            var storagePath = Path.Combine("wwwroot", "tickets", ticketCode + ".pdf");
-            var directory = Path.GetDirectoryName(storagePath);
-            if (!string.IsNullOrEmpty(directory))
+            var basePath = Directory.GetCurrentDirectory();
+            var ticketsPath = Path.Combine(basePath, "wwwroot", "tickets");
+
+            if (!Directory.Exists(ticketsPath))
             {
-                Directory.CreateDirectory(directory);
+                Directory.CreateDirectory(ticketsPath);
+                _logger.LogInformation("Diretorio criado: {TicketsPath}", ticketsPath);
             }
 
-            await File.WriteAllTextAsync(storagePath, "Ticket: " + ticketCode + "\nPassageiro: " + eventObj.PassengerName + "\nAssentos: " + string.Join(", ", eventObj.Seats.Select(s => s.Number)), cancellationToken);
+            var storagePath = Path.Combine(ticketsPath, ticketCode + ".txt");
 
+            var content = "=== BILHETE DE VIAGEM ===\n\n";
+            content += "Ticket: " + ticketCode + "\n";
+            content += "Passageiro: " + eventObj.PassengerName + "\n";
+            content += "Documento: " + eventObj.PassengerDocument + "\n\n";
+            content += "Viagem: " + eventObj.TripOrigin + " -> " + eventObj.TripDestination + "\n";
+            content += "Data: " + eventObj.TripDepartureTime + "\n\n";
+            content += "Assentos:\n";
+            foreach (var seat in eventObj.Seats)
+            {
+                content += " - " + seat.Number + " (" + seat.Type + ") - R " + seat.Price.ToString("F2") + "\n";
+            }
+            content += "\nTotal: R " + eventObj.TotalAmount.ToString("F2") + "\n\n";
+            content += "==========================\n";
+            content += "Este bilhete e eletronico.\n";
+            content += "Apresente no embarque.\n";
+
+            await File.WriteAllTextAsync(storagePath, content, cancellationToken);
+
+            _logger.LogInformation("Bilhete TXT criado: {StoragePath}", storagePath);
             _logger.LogInformation("Bilhete gerado: {TicketCode} - {TicketUrl}", ticketCode, ticketUrl);
 
             using var scope = _serviceProvider.CreateScope();
             var eventPublisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+
+            var qrCode = GenerateQrCode(ticketCode);
 
             var ticketEvent = new TicketGeneratedEvent
             {
@@ -132,7 +165,7 @@ namespace TicketSystem.Infrastructure.Workers
                 TripDestination = eventObj.TripDestination,
                 TripDepartureTime = eventObj.TripDepartureTime,
                 GeneratedAt = DateTime.UtcNow,
-                QrCode = GenerateQrCode(ticketCode)
+                QrCode = qrCode
             };
 
             await eventPublisher.PublishAsync(ticketEvent, cancellationToken);

@@ -1,0 +1,19 @@
+
+=== BILHETE DE VIAGEM ===
+
+Ticket: TKT-260710-8340-93cc8a
+QR Code: QR-TKT-260710-8340-93cc8a-5f960226
+Passageiro: Usuario_101534165ea
+Documento: 33426835419
+
+Viagem: Sao Paulo -> Curitiba
+Data: 11/07/2026 19:26:43
+
+Assentos:
+ - 1B (Aisle) - R$ 84,00
+
+Total: R$ 84,00
+
+==========================
+Este bilhete e eletronico.
+Apresente no embarque.

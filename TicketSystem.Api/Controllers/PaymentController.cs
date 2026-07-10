@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using TicketSystem.Application.DTOs.Reservation;
+using TicketSystem.Application.Events;
 using TicketSystem.Application.Interfaces;
 using TicketSystem.Application.Responses;
+using TicketSystem.Domain.Enums;
 
 namespace TicketSystem.Api.Controllers
 {
@@ -37,7 +39,7 @@ namespace TicketSystem.Api.Controllers
                 return NotFound(new ApiResponse<object>(null, "Reserva nao encontrada"));
             }
 
-            if (reservation.Status != Domain.Enums.ReservationStatus.Pending)
+            if (reservation.Status != ReservationStatus.Pending)
             {
                 return BadRequest(new ApiResponse<object>(null, "Reserva nao esta pendente para pagamento"));
             }
@@ -72,6 +74,22 @@ namespace TicketSystem.Api.Controllers
             {
                 _logger.LogWarning("Pagamento falhou para reserva: {ReservationId} - {FailureReason}",
                 id, result.FailureReason);
+
+                var failedEvent = new PaymentFailedEvent
+                {
+                    ReservationId = id,
+                    TripId = reservation.TripId,
+                    PassengerId = reservation.PassengerId,
+                    PassengerName = reservation.PassengerName,
+                    PassengerEmail = reservation.PassengerEmail,
+                    SeatNumbers = reservation.Seats.Select(s => s.SeatNumber).ToList(),
+                    TotalAmount = reservation.TotalAmount,
+                    PaymentMethod = request.PaymentMethod,
+                    FailureReason = result.FailureReason,
+                    FailedAt = DateTime.UtcNow
+                };
+
+                await _eventPublisher.PublishAsync(failedEvent);
 
                 return BadRequest(new ApiResponse<object>(new
                 {
